@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "author": "Ian Macavilca",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-breadboard-mini", "id": "bb1", "top": 37, "left": -136.8, "attrs": {} },
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 142.34,
+      "left": -92.3,
+      "rotate": 90,
+      "attrs": {}
+    },
+    { "type": "chip-pms5003", "id": "chip1", "top": -66.18, "left": -292.8, "attrs": {} },
+    { "type": "chip-scd41", "id": "chip2", "top": -56.58, "left": 120, "attrs": {} },
+    {
+      "type": "board-ssd1306",
+      "id": "oled1",
+      "top": 214.34,
+      "left": 105.83,
+      "attrs": { "i2cAddress": "0x3c" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": 46.8,
+      "left": 304.2,
+      "rotate": 90,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 61.85,
+      "left": 219.4,
+      "rotate": 180,
+      "attrs": { "value": "1000" }
+    }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "esp:3V3", "bb1:17b.j", "red", [ "v0" ] ],
+    [ "esp:5V", "bb1:1b.j", "red", [ "v0" ] ],
+    [ "esp:GND.1", "bb1:1t.e", "black", [ "v-9.45", "h-57.6", "v-105.6" ] ],
+    [ "chip2:VCC", "bb1:17b.i", "red", [ "h-57.6", "v192" ] ],
+    [ "esp:GND.2", "bb1:17t.e", "black", [ "h9.6", "v-211.2" ] ],
+    [ "chip2:GND", "bb1:17t.d", "black", [ "h-76.8", "v115.2" ] ],
+    [ "bb1:1b.i", "chip1:VCC", "red", [ "h-182.4", "v-201.6" ] ],
+    [ "chip1:GND", "bb1:1t.a", "black", [ "h-9.6", "v96" ] ],
+    [ "chip1:SET", "esp:18", "gray", [ "h-28.8", "v345.6", "h278.4" ] ],
+    [ "chip1:RESET", "esp:19", "white", [ "h11.41", "v355.2", "h144" ] ],
+    [ "chip1:TX", "esp:16", "blue", [ "v355.2", "h117.01" ] ],
+    [ "chip1:RX", "esp:17", "orange", [ "h-38.4", "v364.8", "h268.8" ] ],
+    [ "oled1:VCC", "bb1:17b.h", "red", [ "v0" ] ],
+    [ "oled1:GND", "bb1:17t.c", "black", [ "v0" ] ],
+    [ "esp:21", "bb1:13b.j", "blue", [ "v0" ] ],
+    [ "esp:22", "bb1:14b.j", "orange", [ "v-76.8", "h-19.2" ] ],
+    [ "chip2:SDA", "bb1:13b.i", "blue", [ "v19.2", "h-247.79", "v163.2" ] ],
+    [ "chip2:SCL", "bb1:14b.i", "orange", [ "v-19.2", "h-218.99", "v211.2" ] ],
+    [ "oled1:SDA", "bb1:13b.h", "blue", [ "v-182.4", "h-182.33" ] ],
+    [ "oled1:SCL", "bb1:14b.h", "orange", [ "v-172.8", "h-162.9" ] ],
+    [ "r1:1", "led1:C", "green", [ "v0" ] ],
+    [ "r1:2", "bb1:17t.b", "black", [ "v0" ] ],
+    [ "esp:2", "led1:A", "green", [ "v57.6", "h403.2" ] ]
+  ],
+  "dependencies": {}
+}

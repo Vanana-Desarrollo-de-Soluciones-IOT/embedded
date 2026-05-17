@@ -1,0 +1,12 @@
+{
+  "name": "scd41",
+  "author": "",
+  "pins": [
+    "VCC",
+    "GND",
+    "SDA",
+    "SCL"
+  ],
+  "controls": [
+  ]
+}
