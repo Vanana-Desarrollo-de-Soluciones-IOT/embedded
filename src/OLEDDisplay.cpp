@@ -39,11 +39,8 @@ bool OLEDDisplay::begin() {
     display.setCursor(0, 0);
     display.println("Clair System");
     display.println("Initializing...");
-    display.display();
-    
-    Serial.println("OLED display initialized");
-    Serial.printf("  Resolution: %dx%d\n", display.width(), display.height());
-    Serial.printf("  I2C: SDA=%d, SCL=%d\n", sdaPin, sclPin);
+    display.display();    
+    Serial.println("OLED display initialized");    
     
     delay(2000);
     clear();
