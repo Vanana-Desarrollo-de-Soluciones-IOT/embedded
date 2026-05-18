@@ -14,22 +14,28 @@ SCD41Sensor::~SCD41Sensor() {}
 bool SCD41Sensor::begin() {
     Wire.begin(sdaPin, sclPin);
     Wire.setClock(100000);
-
-    if (!scd41.begin()) {
-        Serial.println("SCD41 sensor init failed");
-        return false;
-    }
     
-    sensorInitialized = true;
-
-    printSerialNumber();
-    
+    // Inicialización
+    scd41.enablePeriodMeasure(SCD4X_STOP_PERIODIC_MEASURE);
+    delay(500);
+    scd41.moduleReinit();
+    delay(50);
     scd41.setAutoCalibMode(true);
-    
     scd41.enablePeriodMeasure(SCD4X_START_PERIODIC_MEASURE);
     
-    delay(6000);
+    // Espera con puntos en la misma línea
+    Serial.print("SCD41 starting");
+    unsigned long startTime = millis();
     
+    for (int i = 0; i < 4; i++) {
+        delay(1000);
+        Serial.print(" .");
+    }
+    
+    unsigned long elapsed = (millis() - startTime) / 1000;
+    Serial.printf(" ✓ Ready after %lu seconds\n", elapsed);
+    
+    sensorInitialized = true;
     return true;
 }
 

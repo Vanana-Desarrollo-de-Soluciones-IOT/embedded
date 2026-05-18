@@ -47,20 +47,20 @@ bool ClairDevice::begin() {
     bool scd41Ok = scd41Device.getSensor().begin();
     bool pmsOk = pms5003Device.getSensor().begin();
     
-    allSensorsReady = scd41Ok && pmsOk;
-    
-    if (!scd41Ok) {
-        Serial.println("SCD41 sensor initialization FAILED");
-    }
-    
+    allSensorsReady = scd41Ok && pmsOk;        
+            
     if (!pmsOk) {
         Serial.println("PMS5003 sensor initialization FAILED");
+    }else {
+        Serial.println("PMS5003 sensor initialized successfully");
     }
-    
-    // Initialize display
+        
     if (!display.begin()) {
         Serial.println("OLED display initialization FAILED");
+    }else {
+        Serial.println("OLED display initialized successfully");
     }
+
     display.setSleepTimeout(30000);  // 30 second timeout
     
     

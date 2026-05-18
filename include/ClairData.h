@@ -129,29 +129,56 @@ struct ClairData {
         statusIcon = "Optimal";
     }
     
+    
     // Print all data to Serial
     void print() {
-        Serial.printf("\n");
-        Serial.printf("Time: %lu ms\n", timestamp);
-        Serial.printf("Status: %s\n", statusLabel.c_str());
-        if (airQuality.valid) {
-            Serial.printf("CO2: %4d ppm\n", airQuality.co2);
-            Serial.printf("Temperature: %4.1f C\n", airQuality.temperature);
-            Serial.printf("Humidity: %4.1f %%\n", airQuality.humidity);
-        }
-
-        if (particulateMatter.valid) {
-            Serial.printf("PM1.0: %4d ug/m3\n", particulateMatter.pm1_0);
-            Serial.printf("PM2.5: %4d ug/m3\n", particulateMatter.pm2_5);
-            Serial.printf("PM10:  %4d ug/m3\n", particulateMatter.pm10);
-        }
-
-        if (airQualityIndex.aqi >= 0) {
-            Serial.printf("AQI: %3d\n", airQualityIndex.aqi);
-            Serial.printf("Category: %s\n", airQualityIndex.category.c_str());
-        }
-        Serial.printf("\n");
+    Serial.println();
+    
+    // Usar print() + println() para control exacto
+    Serial.print("Time:     ");
+    Serial.print(timestamp);
+    Serial.println(" ms");
+    
+    Serial.print("Status:   ");
+    Serial.println(statusLabel.c_str());
+    
+    if (airQuality.valid) {
+        Serial.print("CO2:      ");
+        Serial.print(airQuality.co2);
+        Serial.println(" ppm");
+        
+        Serial.print("Temp:     ");
+        Serial.print(airQuality.temperature, 1);
+        Serial.println(" C");
+        
+        Serial.print("Humidity: ");
+        Serial.print(airQuality.humidity, 1);
+        Serial.println(" %");
     }
+
+    if (particulateMatter.valid) {
+        Serial.print("PM1.0:    ");
+        Serial.print(particulateMatter.pm1_0);
+        Serial.println(" ug/m3");
+        
+        Serial.print("PM2.5:    ");
+        Serial.print(particulateMatter.pm2_5);
+        Serial.println(" ug/m3");
+        
+        Serial.print("PM10:     ");
+        Serial.print(particulateMatter.pm10);
+        Serial.println(" ug/m3");
+    }
+
+    if (airQualityIndex.aqi >= 0) {
+        Serial.print("AQI:      ");
+        Serial.println(airQualityIndex.aqi);
+        
+        Serial.print("Category: ");
+        Serial.println(airQualityIndex.category.c_str());
+    }
+    Serial.println();
+}
 };
 
 #endif // CLAIR_DATA_H

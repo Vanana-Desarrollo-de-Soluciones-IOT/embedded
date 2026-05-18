@@ -1,0 +1,14 @@
+# Wokwi Configuration File
+# Reference: https://docs.wokwi.com/vscode/project-config
+[wokwi]
+version = 1
+firmware = '.pio/build/esp32doit-devkit-v1/firmware.bin'
+elf = '.pio/build/esp32doit-devkit-v1/firmware.elf'
+
+[[chip]]
+name = 'scd41'
+binary = 'chips/scd41.chip.wasm'
+
+[[chip]]
+name = 'pms5003'
+binary = 'chips/pms5003.chip.wasm'

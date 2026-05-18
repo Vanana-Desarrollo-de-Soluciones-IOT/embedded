@@ -23,9 +23,9 @@ struct ClairPins {
     int pms_tx = 17;
     int pms_set = 18;
     int pms_reset = 19;
-    int rgb_red = 25;
+    int rgb_red = 27;
     int rgb_green = 26;
-    int rgb_blue = 27;
+    int rgb_blue = 25;
     
     ClairPins() = default;
     ClairPins(int sda, int scl, int rx, int tx, int set, int reset) 
