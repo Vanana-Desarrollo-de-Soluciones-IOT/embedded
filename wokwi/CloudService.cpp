@@ -1,4 +1,5 @@
 #include "CloudService.h"
+#include <WiFi.h>
 
 CloudService::CloudService() 
     : enabled(false), lastSendTime(0), sendInterval(30000),
@@ -19,6 +20,7 @@ String CloudService::buildPayload(const ClairData& data) {
     // Device info
     doc["deviceId"] = deviceId;
     doc["timestamp"] = data.timestamp;
+    doc["uptime"] = millis() / 1000; 
     
     // Air quality data (SCD41)
     JsonObject airQuality = doc.createNestedObject("airQuality");
@@ -41,15 +43,65 @@ String CloudService::buildPayload(const ClairData& data) {
     } else {
         particulate["valid"] = false;
     }
+
     
-    // AQI
-    JsonObject aqi = doc.createNestedObject("aqi");
-    if (data.airQualityIndex.aqi >= 0) {
-        aqi["value"] = data.airQualityIndex.aqi;
-        aqi["category"] = data.airQualityIndex.category;
+
+    //Connectivity info
+    JsonObject connectivity = doc.createNestedObject("connectivity");
+
+    if (WiFi.status() == WL_CONNECTED) {
+        connectivity["status"] = "connected";
+        connectivity["ssid"] = WiFi.SSID();
+        connectivity["ip"] = WiFi.localIP().toString();
+        connectivity["rssi"] = WiFi.RSSI();
+        connectivity["mac"] = WiFi.macAddress();
+        connectivity["channel"] = WiFi.channel();
+    } else {
+        connectivity["status"] = "disconnected";
+        connectivity["ssid"] = "none";
+        connectivity["ip"] = "0.0.0.0";
+        connectivity["rssi"] = 0;
+        connectivity["mac"] = WiFi.macAddress();
+        connectivity["channel"] = 0;
     }
     
-    // Overall status
+    // Device health
+    JsonObject health = doc.createNestedObject("deviceHealth");
+    
+    // Free heap and memory stats
+    health["freeHeap"] = ESP.getFreeHeap();
+    health["minFreeHeap"] = ESP.getMinFreeHeap();
+    health["heapSize"] = ESP.getHeapSize();
+    health["maxAllocHeap"] = ESP.getMaxAllocHeap();
+    
+    // Sensor status
+    health["scd41Status"] = data.airQuality.valid ? "ok" : "error";
+    health["pms5003Status"] = data.particulateMatter.valid ? "ok" : "error";
+    
+    // Time since last valid sensor reading
+    static unsigned long lastValidAirQualityTime = 0;
+    static unsigned long lastValidPMTime = 0;
+    
+    if (data.airQuality.valid) {
+        lastValidAirQualityTime = millis();
+    }
+    if (data.particulateMatter.valid) {
+        lastValidPMTime = millis();
+    }
+    
+    health["lastValidAirQualitySec"] = (millis() - lastValidAirQualityTime) / 1000;
+    health["lastValidPMSec"] = (millis() - lastValidPMTime) / 1000;
+
+    //Device Info
+    JsonObject deviceInfo = doc.createNestedObject("deviceInfo");
+    deviceInfo["chipModel"] = ESP.getChipModel();
+    deviceInfo["chipRevision"] = ESP.getChipRevision();
+    deviceInfo["cpuFreqMHz"] = ESP.getCpuFreqMHz();
+    deviceInfo["flashSize"] = ESP.getFlashChipSize();
+    deviceInfo["sketchSize"] = ESP.getSketchSize();
+    deviceInfo["freeSketchSpace"] = ESP.getFreeSketchSpace();
+    
+    //Overall status
     doc["status"] = data.statusLabel;
     doc["statusCode"] = data.status;
     
