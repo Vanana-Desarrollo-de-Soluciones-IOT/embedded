@@ -7,7 +7,7 @@
  * 
  * This abstract base class represents input devices in the Modest IoT Nano-framework, providing
  * a foundation for sensors that generate events. It includes event propagation to an optional
- * handler, supporting the framework’s event-driven design.
+ * handler, supporting the framework's event-driven design.
  * 
  * @author Angel Velasquez
  * @date March 22, 2025

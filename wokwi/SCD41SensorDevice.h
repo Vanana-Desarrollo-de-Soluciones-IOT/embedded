@@ -19,7 +19,7 @@ public:
     void handle(Command command) override;
     
     SCD41Sensor& getSensor();
-    void update();  // Método para actualizar el sensor periódicamente
+    void update();  // Update the sensor periodically
 };
 
 #endif

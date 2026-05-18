@@ -7,7 +7,7 @@
  * 
  * This abstract base class represents output devices in the Modest IoT Nano-framework, providing
  * a foundation for actuators that respond to commands. It includes command propagation to an
- * optional handler, supporting the framework’s CQRS-inspired design.
+ * optional handler, supporting the framework's CQRS-inspired design.
  * 
  * @author Angel Velasquez
  * @date March 22, 2025

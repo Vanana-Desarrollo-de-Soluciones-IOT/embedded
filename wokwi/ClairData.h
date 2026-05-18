@@ -33,7 +33,7 @@ struct ClairData {
         String category;
     } airQualityIndex;
     
-    // Air Quality Status (nuevo)
+    // Air Quality Status
     AirQualityStatus status;
     String statusLabel;
     String statusIcon;
@@ -56,7 +56,7 @@ struct ClairData {
         
         status = OPTIMAL;
         statusLabel = "Optimal";
-        statusIcon = "✓✓";
+        statusIcon = "Optimal";
     }
     
     // Calculate AQI based on PM2.5
@@ -105,7 +105,7 @@ struct ClairData {
               airQuality.humidity > thresholds.humidityCriticalHigh))) {
             status = CRITICAL;
             statusLabel = "Critical";
-            statusIcon = "⚠️⚠️";
+            statusIcon = "Critical";
             return;
         }
         
@@ -119,64 +119,36 @@ struct ClairData {
               airQuality.humidity > thresholds.humidityModerateHigh))) {
             status = MODERATE;
             statusLabel = "Moderate";
-            statusIcon = "⚠️";
+            statusIcon = "Moderate";
             return;
         }
         
         // Default: OPTIMAL
         status = OPTIMAL;
         statusLabel = "Optimal";
-        statusIcon = "✓✓";
+        statusIcon = "Optimal";
     }
     
     // Print all data to Serial
     void print() {
-        Serial.println("\n╔════════════════════════════════════════════════════╗");
-        Serial.println("║              CLAIR ENVIRONMENTAL SYSTEM           ║");
-        Serial.println("╠════════════════════════════════════════════════════╣");
-        Serial.printf("║ Time: %lu ms                                       ║\n", timestamp);
-        Serial.println("╠────────────────────────────────────────────────────╣");
-        
-        // Overall Status
-        Serial.printf("║ Status: %s %-30s║\n", 
-                      statusIcon.c_str(), 
-                      statusLabel.c_str());
-        Serial.println("╠────────────────────────────────────────────────────╣");
-        
-        // Air Quality Section
-        Serial.println("║ AIR QUALITY (SCD41):                               ║");
+        Serial.printf("Time: %lu ms\n", timestamp);
+        Serial.printf("Status: %s\n", statusLabel.c_str());
         if (airQuality.valid) {
-            Serial.printf("║   • CO2:        %4d ppm                           ║\n", airQuality.co2);
-            Serial.printf("║   • Temperature: %4.1f °C                         ║\n", airQuality.temperature);
-            Serial.printf("║   • Humidity:    %4.1f %%                         ║\n", airQuality.humidity);
-        } else {
-            Serial.println("║   • No data available                             ║");
+            Serial.printf("CO2: %4d ppm\n", airQuality.co2);
+            Serial.printf("Temperature: %4.1f C\n", airQuality.temperature);
+            Serial.printf("Humidity: %4.1f %%\n", airQuality.humidity);
         }
-        
-        Serial.println("╠────────────────────────────────────────────────────╣");
-        
-        // Particulate Matter Section
-        Serial.println("║ PARTICULATE MATTER (PMS5003):                      ║");
+
         if (particulateMatter.valid) {
-            Serial.printf("║   • PM1.0:   %4d μg/m³                           ║\n", particulateMatter.pm1_0);
-            Serial.printf("║   • PM2.5:   %4d μg/m³                           ║\n", particulateMatter.pm2_5);
-            Serial.printf("║   • PM10:    %4d μg/m³                           ║\n", particulateMatter.pm10);
-        } else {
-            Serial.println("║   • No data available                             ║");
+            Serial.printf("PM1.0: %4d ug/m3\n", particulateMatter.pm1_0);
+            Serial.printf("PM2.5: %4d ug/m3\n", particulateMatter.pm2_5);
+            Serial.printf("PM10:  %4d ug/m3\n", particulateMatter.pm10);
         }
-        
-        Serial.println("╠────────────────────────────────────────────────────╣");
-        
-        // AQI Section
-        Serial.println("║ AIR QUALITY INDEX:                                 ║");
+
         if (airQualityIndex.aqi >= 0) {
-            Serial.printf("║   • AQI:       %3d                                 ║\n", airQualityIndex.aqi);
-            Serial.printf("║   • Category:  %-20s║\n", airQualityIndex.category.c_str());
-        } else {
-            Serial.println("║   • No data available                             ║");
+            Serial.printf("AQI: %3d\n", airQualityIndex.aqi);
+            Serial.printf("Category: %s\n", airQualityIndex.category.c_str());
         }
-        
-        Serial.println("╚════════════════════════════════════════════════════╝\n");
     }
 };
 

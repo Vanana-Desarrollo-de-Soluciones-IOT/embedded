@@ -8,9 +8,9 @@
  * @brief Structure to hold particulate matter readings
  */
 struct PMS5003Data {
-    uint16_t pm1_0;   // PM1.0 concentration (μg/m³)
-    uint16_t pm2_5;   // PM2.5 concentration (μg/m³)
-    uint16_t pm10;    // PM10 concentration (μg/m³)
+    uint16_t pm1_0;   // PM1.0 concentration (ug/m3)
+    uint16_t pm2_5;   // PM2.5 concentration (ug/m3)
+    uint16_t pm10;    // PM10 concentration (ug/m3)
     bool valid;       // Flag indicating if data is valid
 };
 

@@ -1,4 +1,4 @@
-// ClairDevice.h - Versión corregida
+// ClairDevice.h - corrected version
 
 #ifndef CLAIR_DEVICE_H
 #define CLAIR_DEVICE_H
@@ -63,7 +63,7 @@ private:
     void updateWarningLed();
     
     // Helper method for display
-    String getAirQualityLabel(int co2);  // <-- AGREGAR ESTA LÍNEA
+    String getAirQualityLabel(int co2);  // add this line
     
 public:
     // Command IDs for Clair System
@@ -80,7 +80,7 @@ public:
                 int displayScl = 22,
                 int ledPin = 2);
     
-    // Constructor con parámetros individuales
+    // Constructor with individual parameters
     ClairDevice(int sda, int scl, int rx, int tx, int set, int reset,
                 unsigned long scd41Interval = 2000,
                 unsigned long pmsInterval = 2000,

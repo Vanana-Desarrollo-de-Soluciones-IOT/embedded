@@ -15,7 +15,7 @@ OLEDDisplay::~OLEDDisplay() {}
 
 // Initialize display
 bool OLEDDisplay::begin() {
-    Serial.println("Inicializando OLED Display SSD1306...");
+    Serial.println("Initializing OLED display");
     
     // Initialize I2C
     Wire.begin(sdaPin, sclPin);
@@ -23,9 +23,9 @@ bool OLEDDisplay::begin() {
     
     // Initialize display
     if (!display.begin(SSD1306_SWITCHCAPVCC, i2cAddress)) {
-        Serial.println("❌ Error: OLED Display no encontrado!");
-        Serial.printf("   → Verifique conexiones I2C (SDA=%d, SCL=%d)\n", sdaPin, sclPin);
-        Serial.printf("   → Dirección I2C: 0x%02X\n", i2cAddress);
+        Serial.println("OLED display not found");
+        Serial.printf("  Check I2C connections (SDA=%d, SCL=%d)\n", sdaPin, sclPin);
+        Serial.printf("  I2C address: 0x%02X\n", i2cAddress);
         return false;
     }
     
@@ -41,9 +41,9 @@ bool OLEDDisplay::begin() {
     display.println("Initializing...");
     display.display();
     
-    Serial.println("✅ OLED Display inicializado correctamente!");
-    Serial.printf("   → Resolución: %dx%d\n", display.width(), display.height());
-    Serial.printf("   → I2C: SDA=%d, SCL=%d\n", sdaPin, sclPin);
+    Serial.println("OLED display initialized");
+    Serial.printf("  Resolution: %dx%d\n", display.width(), display.height());
+    Serial.printf("  I2C: SDA=%d, SCL=%d\n", sdaPin, sclPin);
     
     delay(2000);
     clear();
@@ -71,21 +71,21 @@ void OLEDDisplay::refresh() {
     
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);  // Tamaño más pequeño posible
+    display.setTextSize(1);  // Smallest text size
     
     int y = 0;
-    int lineHeight = 8;  // Reducido de 10 a 8 píxeles para que quepan más líneas
+    int lineHeight = 8;  // Reduced from 10 to 8 pixels
     
-    // === Línea 1: Status ===
+    // Line 1: Status
     display.setCursor(0, y);
     display.print("Status: ");
     display.println(currentData.airQuality.statusLabel);
     y += lineHeight;
     
-    // Línea en blanco
+    // Blank line
     y += lineHeight/2;
     
-    // === Línea 2: PM1.0 ===
+    // Line 2: PM1.0
     display.setCursor(0, y);
     display.print("PM1.0: ");
     if (currentData.particulateMatter.valid) {
@@ -96,7 +96,7 @@ void OLEDDisplay::refresh() {
     display.println(" ug/m3");
     y += lineHeight;
     
-    // === Línea 3: PM2.5 ===
+    // Line 3: PM2.5
     display.setCursor(0, y);
     display.print("PM2.5: ");
     if (currentData.particulateMatter.valid) {
@@ -107,7 +107,7 @@ void OLEDDisplay::refresh() {
     display.println(" ug/m3");
     y += lineHeight;
     
-    // === Línea 4: PM10 ===
+    // Line 4: PM10
     display.setCursor(0, y);
     display.print("PM10 : ");
     if (currentData.particulateMatter.valid) {
@@ -118,7 +118,7 @@ void OLEDDisplay::refresh() {
     display.println(" ug/m3");
     y += lineHeight;
     
-    // === Línea 5: CO2 ===
+    // Line 5: CO2
     display.setCursor(0, y);
     display.print("CO2  : ");
     if (currentData.airQuality.valid) {
@@ -129,7 +129,7 @@ void OLEDDisplay::refresh() {
     display.println(" ppm");
     y += lineHeight;
     
-    // === Línea 6: T/H ===
+    // Line 6: T/H
     display.setCursor(0, y);
     display.print("T/H  : ");
     if (currentData.airQuality.valid) {
@@ -156,7 +156,7 @@ void OLEDDisplay::sleep() {
     if (!initialized) return;
     if (currentState == DISPLAY_SLEEP) return;
     
-    Serial.println("💤 OLED Display: Entering sleep mode");
+    Serial.println("OLED display entering sleep mode");
     display.ssd1306_command(SSD1306_DISPLAYOFF);
     currentState = DISPLAY_SLEEP;
     lastWakeTime = millis();
@@ -167,7 +167,7 @@ void OLEDDisplay::wake() {
     if (!initialized) return;
     if (currentState != DISPLAY_SLEEP) return;
     
-    Serial.println("🔆 OLED Display: Waking up");
+    Serial.println("OLED display waking up");
     display.ssd1306_command(SSD1306_DISPLAYON);
     currentState = DISPLAY_ON;
     refresh();  // Redraw content
@@ -177,7 +177,7 @@ void OLEDDisplay::wake() {
 void OLEDDisplay::off() {
     if (!initialized) return;
     
-    Serial.println("⭕ OLED Display: Turning off");
+    Serial.println("OLED display turning off");
     display.ssd1306_command(SSD1306_DISPLAYOFF);
     currentState = DISPLAY_OFF;
 }
@@ -186,7 +186,7 @@ void OLEDDisplay::off() {
 void OLEDDisplay::on() {
     if (!initialized) return;
     
-    Serial.println("🟢 OLED Display: Turning on");
+    Serial.println("OLED display turning on");
     display.ssd1306_command(SSD1306_DISPLAYON);
     currentState = DISPLAY_ON;
     refresh();

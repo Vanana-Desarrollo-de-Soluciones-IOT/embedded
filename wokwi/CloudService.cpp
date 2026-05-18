@@ -9,12 +9,6 @@ void CloudService::begin(const String& url, const String& id, unsigned long inte
     deviceId = id;
     sendInterval = interval;
     enabled = true;
-    
-    Serial.println("\n☁️ Initializing Cloud Service...");
-    Serial.printf("  → Endpoint: %s\n", endpointUrl.c_str());
-    Serial.printf("  → Device ID: %s\n", deviceId.c_str());
-    Serial.printf("  → Send Interval: %lu ms\n", sendInterval);
-    
     // Test connection
     testConnection();
 }
@@ -66,40 +60,25 @@ String CloudService::buildPayload(const ClairData& data) {
 
 bool CloudService::sendData(const ClairData& data) {
     if (!enabled) {
-        Serial.println("☁️ Cloud service disabled");
         return false;
     }
     
     if (endpointUrl.length() == 0) {
-        Serial.println("❌ No endpoint URL configured");
         return false;
     }
     
     String payload = buildPayload(data);
     
-    Serial.println("\n☁️ Sending data to cloud...");
-    Serial.printf("  → Payload size: %d bytes\n", payload.length());
-    
     httpClient.begin(endpointUrl);
     httpClient.addHeader(CONTENT_TYPE_HEADER, APPLICATION_JSON);
     
     int httpResponseCode = httpClient.POST(payload);
-    String response = httpClient.getString();
-    
     httpClient.end();
     
     if (httpResponseCode == 200 || httpResponseCode == 201) {
-        Serial.printf("  ✅ Success! HTTP %d\n", httpResponseCode);
         successfulSends++;
-        
-        // Parse response if needed
-        JsonDocument responseDoc;
-        deserializeJson(responseDoc, response);
-        
         return true;
     } else {
-        Serial.printf("  ❌ Failed! HTTP %d\n", httpResponseCode);
-        Serial.printf("  Response: %s\n", response.c_str());
         failedSends++;
         return false;
     }
@@ -119,29 +98,16 @@ bool CloudService::sendDataThrottled(const ClairData& data) {
 bool CloudService::testConnection() {
     if (endpointUrl.length() == 0) return false;
     
-    Serial.println("☁️ Testing cloud connection...");
-    
     httpClient.begin(endpointUrl);
     int httpResponseCode = httpClient.GET();
     httpClient.end();
     
     if (httpResponseCode == 200) {
-        Serial.println("  ✅ Connection successful");
         return true;
     } else {
-        Serial.printf("  ⚠️ Connection test returned HTTP %d\n", httpResponseCode);
         return false;
     }
 }
 
 void CloudService::printStats() {
-    Serial.println("\n☁️ Cloud Service Statistics:");
-    Serial.println("═══════════════════════════════");
-    Serial.printf("  Status:        %s\n", enabled ? "Enabled" : "Disabled");
-    Serial.printf("  Successful:    %lu\n", successfulSends);
-    Serial.printf("  Failed:        %lu\n", failedSends);
-    Serial.printf("  Success Rate:  %.1f%%\n", 
-                  (successfulSends + failedSends) > 0 ? 
-                  (float)successfulSends / (successfulSends + failedSends) * 100 : 0);
-    Serial.println("═══════════════════════════════\n");
 }

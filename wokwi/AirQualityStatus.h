@@ -16,11 +16,11 @@ enum AirQualityStatus {
  * @brief Thresholds for air quality evaluation
  */
 struct AirQualityThresholds {
-    // PM2.5 thresholds (μg/m³)
+    // PM2.5 thresholds (ug/m3)
     uint16_t pm25ModerateLimit = 35;   // EPA 24-hour standard
     uint16_t pm25CriticalLimit = 55;    // Unhealthy for sensitive groups
     
-    // PM10 thresholds (μg/m³)
+    // PM10 thresholds (ug/m3)
     uint16_t pm10ModerateLimit = 75;    // EPA 24-hour standard
     uint16_t pm10CriticalLimit = 150;   // Unhealthy
     
@@ -34,10 +34,10 @@ struct AirQualityThresholds {
     uint8_t humidityCriticalLow = 20;    // Very dry
     uint8_t humidityCriticalHigh = 80;   // Very humid
     
-    // Constructor con valores por defecto
+    // Default constructor
     AirQualityThresholds() = default;
     
-    // Constructor para configuración personalizada
+    // Constructor for custom configuration
     AirQualityThresholds(uint16_t pm25Mod, uint16_t pm25Crit,
                          uint16_t pm10Mod, uint16_t pm10Crit,
                          uint16_t co2Mod, uint16_t co2Crit,
@@ -66,17 +66,17 @@ inline const char* airQualityLabel(AirQualityStatus status) {
 }
 
 /**
- * @brief Converts AirQualityStatus to icon/emoji
+ * @brief Converts AirQualityStatus to icon
  */
 inline const char* airQualityIcon(AirQualityStatus status) {
     switch (status) {
         case CRITICAL:
-            return "⚠️⚠️";
+            return "Critical";
         case MODERATE:
-            return "⚠️";
+            return "Moderate";
         case OPTIMAL:
         default:
-            return "✓✓";
+            return "Optimal";
     }
 }
 

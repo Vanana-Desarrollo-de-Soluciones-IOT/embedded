@@ -24,8 +24,6 @@ PMS5003Sensor::~PMS5003Sensor() {
 
 // Initialize sensor
 bool PMS5003Sensor::begin() {
-    Serial.println("Inicializando sensor PMS5003...");
-    
     // Configure control pins
     pinMode(setPin, OUTPUT);
     pinMode(resetPin, OUTPUT);
@@ -43,9 +41,6 @@ bool PMS5003Sensor::begin() {
     serial->begin(9600, SERIAL_8N1, rxPin, txPin);
     
     sensorInitialized = true;
-    Serial.println("Sensor PMS5003 inicializado correctamente!");
-    Serial.println("  → UART2 configurado a 9600 baudios");
-    Serial.println("  → Modo normal (activo)");
     
     return true;
 }
@@ -61,15 +56,6 @@ void PMS5003Sensor::update() {
         if (readFrame(newData) && newData.valid) {
             lastData = newData;
             dataReady = true;
-            
-            // Print readings 
-            //Serial.println("╔════════════════════════════════════════╗");
-            //Serial.println("║         PMS5003 Particulate Matter     ║");
-            //Serial.println("╠════════════════════════════════════════╣");
-            //Serial.printf("║ PM1.0: %4d μg/m³                      ║\n", lastData.pm1_0);
-            //Serial.printf("║ PM2.5: %4d μg/m³                      ║\n", lastData.pm2_5);
-            //Serial.printf("║ PM10:  %4d μg/m³                      ║\n", lastData.pm10);
-            //Serial.println("╚════════════════════════════════════════╝");
             
             // Notify Device that new data is available
             if (handler != nullptr) {
@@ -145,16 +131,13 @@ void PMS5003Sensor::on(Event event) {
     }
 }
 
-// Get latest data
 PMS5003Data PMS5003Sensor::getData() {
     return lastData;
 }
 
-// Put sensor to sleep
 void PMS5003Sensor::sleep() {
     if (!sensorInitialized) return;
     
-    Serial.println("PMS5003: Entrando en modo sleep...");
     digitalWrite(setPin, LOW);
     isSleeping = true;
     
@@ -163,37 +146,27 @@ void PMS5003Sensor::sleep() {
     }
 }
 
-// Wake sensor from sleep
 void PMS5003Sensor::wake() {
     if (!sensorInitialized) return;
     
-    Serial.println("PMS5003: Despertando...");
     digitalWrite(setPin, HIGH);
     isSleeping = false;
-    delay(100);  // Allow sensor to stabilize
+    delay(100);
     
     if (handler != nullptr) {
         handler->on(Event(WAKE_MODE_EVENT_ID));
     }
 }
 
-// Reset sensor module
 void PMS5003Sensor::reset() {
     if (!sensorInitialized) return;
     
-    Serial.println("PMS5003: Reseteando módulo...");
     digitalWrite(resetPin, LOW);
     delay(10);
     digitalWrite(resetPin, HIGH);
-    delay(100);  // Wait for sensor to restart
+    delay(100);
     
-    // ELIMINA estas líneas:
-    // if (handler != nullptr) {
-    //     handler->handle(Command(RESET_COMMAND_ID));
-    // }
-    
-    // En su lugar, solo notifica el evento (si quieres)
     if (handler != nullptr) {
-        handler->on(Event(RESET_COMMAND_ID));  // Usa on(), no handle()
+        handler->on(Event(RESET_COMMAND_ID));
     }
 }
