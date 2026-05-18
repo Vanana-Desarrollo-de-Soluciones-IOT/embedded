@@ -24,7 +24,7 @@ void printBanner() {
     Serial.println("  ╚██████╗███████╗██║  ██║██║██║  ██║");
     Serial.println("   ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝");
     Serial.println("                                         ");
-    Serial.println("   Environmental Monitoring System v1.0");
+    Serial.println("   Environmental Monitoring System v1.2");
     Serial.println("   =====================================\n");
 }
 

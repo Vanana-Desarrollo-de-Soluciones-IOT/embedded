@@ -129,9 +129,12 @@ bool CloudService::sendData(const ClairData& data) {
     
     if (httpResponseCode == 200 || httpResponseCode == 201) {
         successfulSends++;
+        Serial.println("[CloudService] Data sent successfully");  
         return true;
     } else {
         failedSends++;
+        Serial.print("[CloudService] Failed to send data. HTTP code: ");
+        Serial.println(httpResponseCode); 
         return false;
     }
 }
