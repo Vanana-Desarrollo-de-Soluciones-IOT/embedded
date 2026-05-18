@@ -6,6 +6,7 @@ in
 pkgs.mkShell {
   packages = with pkgs; [
     arduino-cli
+    platformio
     python3
     git
     jq
@@ -102,13 +103,11 @@ EOF
     cat <<'EOF'
 Entorno listo.
 
-Arduino CLI:
-  arduino-cli core install esp32:esp32
-  arduino-cli lib install "DFRobot_SCD4X" "Adafruit SSD1306" "ArduinoJson"
+Compilar firmware para Wokwi:
+  pio run
 
-Compilar chips Wokwi:
-  $CC -O2 -Ichips -o wokwi/pms5003.chip.wasm chips/pms5003.chip.c
-  $CC -O2 -Ichips -o wokwi/scd41.chip.wasm chips/scd41.chip.c
+El binario debe quedar en:
+  .pio/build/esp32doit-devkit-v1/firmware.bin
 
 Luego abre el proyecto con la extensión de Wokwi en VS Code.
 EOF
