@@ -7,12 +7,11 @@ ClairDevice::ClairDevice(const ClairPins& pins,
                          unsigned long pmsInterval,
                          unsigned long reportInterval,
                          int displaySda,
-                         int displayScl,
-                         int ledPin)
+                         int displayScl)
     : scd41Device(pins.scd41_sda, pins.scd41_scl, scd41Interval),
       pms5003Device(pins.pms_rx, pins.pms_tx, pins.pms_set, pins.pms_reset, pmsInterval),
       display(128, 64, displaySda, displayScl, 0x3C, this),
-      warningLed(ledPin, false, this),  
+      warningLed(pins.rgb_red, pins.rgb_green, pins.rgb_blue, false, false, false, this, true),
       lastReportTime(0),
       reportInterval(reportInterval),
       allSensorsReady(false),
@@ -26,11 +25,13 @@ ClairDevice::ClairDevice(int sda, int scl, int rx, int tx, int set, int reset,
                          unsigned long reportInterval,
                          int displaySda,
                          int displayScl,
-                         int ledPin)
+                         int rgbRedPin,
+                         int rgbGreenPin,
+                         int rgbBluePin)
     : scd41Device(sda, scl, scd41Interval),
       pms5003Device(rx, tx, set, reset, pmsInterval),
       display(128, 64, displaySda, displayScl, 0x3C, this),
-      warningLed(ledPin, false, this),  
+      warningLed(rgbRedPin, rgbGreenPin, rgbBluePin, false, false, false, this, true),
       lastReportTime(0),
       reportInterval(reportInterval),
       allSensorsReady(false),
@@ -59,10 +60,7 @@ bool ClairDevice::begin() {
     display.setSleepTimeout(30000);  // 30 second timeout
     
     
-    // LED test
-    warningLed.setState(true);
-    delay(500);
-    warningLed.setState(false);    
+    warningLed.off();
 
     
     if (allSensorsReady) {
@@ -138,20 +136,18 @@ void ClairDevice::updateWarningLed() {
         unsigned long now = millis();
         if (now - lastLedBlink > 250) {
             ledBlinkState = !ledBlinkState;
-            warningLed.setState(ledBlinkState);
+            warningLed.setColor(ledBlinkState, false, false);
             lastLedBlink = now;
         }
     } else if (currentData.status == MODERATE) {
         unsigned long now = millis();
         if (now - lastLedBlink > 1000) {
             ledBlinkState = !ledBlinkState;
-            warningLed.setState(ledBlinkState);
+            warningLed.setColor(ledBlinkState, ledBlinkState, false);
             lastLedBlink = now;
         }
     } else {
-        if (warningLed.getState()) {
-            warningLed.setState(false);
-        }
+        warningLed.setColor(false, true, false);
     }
 }
 
