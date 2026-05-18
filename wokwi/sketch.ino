@@ -11,6 +11,8 @@
 #define CLOUD_ENDPOINT "https://iot-edge-6785-im.free.beeceptor.com/api/v1/data-records"
 #define DEVICE_ID "CLAIR001"
 
+#define CLAIR_SIMULATION_MODE true
+
 ClairDevice clair;
 
 void setup() {
@@ -20,11 +22,14 @@ void setup() {
     printBanner();//optional
 
     if (clair.begin()) {
+        Serial.println("System ready");
     } else {
+        Serial.println("System partially operational");
     }
 
     clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
     clair.setupCloud(CLOUD_ENDPOINT, DEVICE_ID, 30000);
+    clair.setSimulationEnabled(CLAIR_SIMULATION_MODE);
 }
 
 void loop() {

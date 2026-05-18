@@ -9,7 +9,7 @@
 #include "OLEDDisplay.h"
 #include "ClairData.h"
 #include "AirQualityStatus.h"
-#include "Led.h" 
+#include "RgbLed.h" 
 #include "WiFiService.h"
 #include "CloudService.h"
 
@@ -23,6 +23,9 @@ struct ClairPins {
     int pms_tx = 17;
     int pms_set = 18;
     int pms_reset = 19;
+    int rgb_red = 25;
+    int rgb_green = 26;
+    int rgb_blue = 27;
     
     ClairPins() = default;
     ClairPins(int sda, int scl, int rx, int tx, int set, int reset) 
@@ -38,7 +41,7 @@ private:
     SCD41SensorDevice scd41Device;
     PMS5003SensorDevice pms5003Device;
     OLEDDisplay display;
-    Led warningLed;
+    RgbLed warningLed;
         
     ClairData currentData;
     AirQualityThresholds thresholds; 
@@ -50,10 +53,12 @@ private:
     unsigned long lastReportTime;
     unsigned long reportInterval;
     bool allSensorsReady;
+    bool simulationEnabled;
+    unsigned long simulationStartTime;
 
-    // LED control
-    unsigned long lastLedBlink;
-    bool ledBlinkState;
+    // RGB status control
+    AirQualityStatus lastDisplayedStatus;
+    bool displayInitialized;
     
     // Private methods
     void updateAirQualityData();
@@ -61,6 +66,8 @@ private:
     void generateUnifiedReport();
     void checkSensorStatus();
     void updateWarningLed();
+    void refreshDisplay();
+    void updateSimulationData();
     
     // Helper method for display
     String getAirQualityLabel(int co2);  // add this line
@@ -71,14 +78,13 @@ public:
     static const int CLAIR_CALIBRATE_COMMAND = 1001;
     static const int CLAIR_RESET_COMMAND = 1002;
     
-    // Constructor con struct
+    // Constructor with pin struct
     ClairDevice(const ClairPins& pins = ClairPins(), 
                 unsigned long scd41Interval = 2000,
                 unsigned long pmsInterval = 2000,
                 unsigned long reportInterval = 10000,
                 int displaySda = 21,
-                int displayScl = 22,
-                int ledPin = 2);
+                int displayScl = 22);
     
     // Constructor with individual parameters
     ClairDevice(int sda, int scl, int rx, int tx, int set, int reset,
@@ -87,7 +93,9 @@ public:
                 unsigned long reportInterval = 10000,
                 int displaySda = 21,
                 int displayScl = 22,
-                int ledPin = 2);
+                int rgbRedPin = 25,
+                int rgbGreenPin = 26,
+                int rgbBluePin = 27);
     
     bool begin();
     void update();
@@ -101,7 +109,7 @@ public:
     SCD41SensorDevice& getSCD41Device() { return scd41Device; }
     PMS5003SensorDevice& getPMS5003Device() { return pms5003Device; }
     OLEDDisplay& getDisplay() { return display; }
-    Led& getWarningLed() { return warningLed; }
+    RgbLed& getWarningLed() { return warningLed; }
 
     void setAirQualityThresholds(const AirQualityThresholds& newThresholds) {
         thresholds = newThresholds;
@@ -118,6 +126,9 @@ public:
     void setupCloud(const String& endpoint, const String& deviceId, unsigned long interval = 30000);
     void setCloudEnabled(bool enabled) { cloud.setEnabled(enabled); }
     bool isCloudEnabled() const { return cloud.isEnabled(); }
+
+    void setSimulationEnabled(bool enabled);
+    bool isSimulationEnabled() const { return simulationEnabled; }
 
      // WiFi status
     bool isWiFiConnected() const { return wifi.isConnected(); }
