@@ -131,6 +131,7 @@ struct ClairData {
     
     // Print all data to Serial
     void print() {
+        Serial.printf("\n");
         Serial.printf("Time: %lu ms\n", timestamp);
         Serial.printf("Status: %s\n", statusLabel.c_str());
         if (airQuality.valid) {
@@ -149,6 +150,7 @@ struct ClairData {
             Serial.printf("AQI: %3d\n", airQualityIndex.aqi);
             Serial.printf("Category: %s\n", airQualityIndex.category.c_str());
         }
+        Serial.printf("\n");
     }
 };
 
