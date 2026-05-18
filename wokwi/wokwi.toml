@@ -1,0 +1,12 @@
+[wokwi]
+version = 1
+firmware = "build/wokwi.ino.elf"
+elf = "build/wokwi.ino.elf"
+
+[[chip]]
+name = "pms5003"
+binary = "pms5003.chip.wasm"
+
+[[chip]]
+name = "scd41"
+binary = "scd41.chip.wasm"
