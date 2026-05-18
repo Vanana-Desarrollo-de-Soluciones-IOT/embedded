@@ -53,10 +53,12 @@ private:
     unsigned long lastReportTime;
     unsigned long reportInterval;
     bool allSensorsReady;
+    bool simulationEnabled;
+    unsigned long simulationStartTime;
 
     // RGB status control
-    unsigned long lastLedBlink;
-    bool ledBlinkState;
+    AirQualityStatus lastDisplayedStatus;
+    bool displayInitialized;
     
     // Private methods
     void updateAirQualityData();
@@ -64,6 +66,8 @@ private:
     void generateUnifiedReport();
     void checkSensorStatus();
     void updateWarningLed();
+    void refreshDisplay();
+    void updateSimulationData();
     
     // Helper method for display
     String getAirQualityLabel(int co2);  // add this line
@@ -122,6 +126,9 @@ public:
     void setupCloud(const String& endpoint, const String& deviceId, unsigned long interval = 30000);
     void setCloudEnabled(bool enabled) { cloud.setEnabled(enabled); }
     bool isCloudEnabled() const { return cloud.isEnabled(); }
+
+    void setSimulationEnabled(bool enabled);
+    bool isSimulationEnabled() const { return simulationEnabled; }
 
      // WiFi status
     bool isWiFiConnected() const { return wifi.isConnected(); }
