@@ -85,6 +85,18 @@ private:
     
     // Helper method for display
     String getAirQualityLabel(int co2);  // add this line
+
+    // Simulation helpers
+    enum SimulationPhase { PHASE_OPTIMAL, PHASE_MODERATE, PHASE_CRITICAL };
+    SimulationPhase getCurrentSimulationPhase(unsigned long elapsed) const;
+    void fillOptimalSimulationData(ClairData& data, unsigned long now);
+    void fillModerateSimulationData(ClairData& data, unsigned long now);
+    void fillCriticalSimulationData(ClairData& data, unsigned long now);
+
+    bool timeSynchronized;
+    unsigned long lastNTPSync;
+    unsigned long ntpSyncInterval;  // Resincronizar cada hora
+    long timezoneOffset;  // Diferencia en segundos respecto a UTC
     
 public:
     // Command IDs for Clair System
@@ -155,6 +167,13 @@ public:
     
     // NUEVO: Obtener estado de inicialización
     const char* getInitStateString() const;
+
+    // NUEVO: Configurar NTP para tiempo real    
+    void beginNTP(const char* ntpServer = "pool.ntp.org", long timezoneOffset = -18000);  // -18000 = UTC-5 (Colombia/Perú/New York)
+    void updateNTP();
+    bool isTimeSynchronized() const { return timeSynchronized; }
+    String getFormattedTime();  // Retorna "HH:MM:SS"
+    unsigned long getCurrentEpoch();  // Retorna segundos desde 1970
 };
 
 #endif // CLAIR_DEVICE_H

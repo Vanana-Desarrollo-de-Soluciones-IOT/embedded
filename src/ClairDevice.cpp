@@ -1,5 +1,14 @@
 #include "ClairDevice.h"
 #include <Arduino.h>
+#include <time.h>
+
+// Constantes de simulación 
+static const unsigned long SIM_PHASE_OPTIMAL_DURATION = 20000UL;
+static const unsigned long SIM_PHASE_MODERATE_DURATION = 8000UL;
+static const unsigned long SIM_PHASE_CRITICAL_DURATION = 3000UL;
+static const unsigned long SIM_CYCLE_DURATION = SIM_PHASE_OPTIMAL_DURATION + 
+                                                  SIM_PHASE_MODERATE_DURATION + 
+                                                  SIM_PHASE_CRITICAL_DURATION;
 
 // Constructor con struct
 ClairDevice::ClairDevice(const ClairPins& pins, 
@@ -21,7 +30,11 @@ ClairDevice::ClairDevice(const ClairPins& pins,
       displayInitialized(false),
       initState(INIT_NOT_STARTED),
       initStartTime(0),
-      initTimeoutOccurred(false) {}
+      initTimeoutOccurred(false),
+      timeSynchronized(false),
+      lastNTPSync(0),
+      ntpSyncInterval(3600000),  // 1 hora
+      timezoneOffset(-18000) {}  // UTC-5 por defecto
 
 // Inicializar sistema
 bool ClairDevice::begin() {
@@ -43,6 +56,88 @@ bool ClairDevice::begin() {
     
     // No esperar aquí - la inicialización continuará en update()
     return true;  // Siempre retorna true, la inicialización continúa en background
+}
+
+void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
+    this->timezoneOffset = timezoneOffset;
+    
+    configTime(timezoneOffset, 0, ntpServer);
+    
+    Serial.print("[NTP] Synchronizing time with ");
+    Serial.print(ntpServer);
+    Serial.println("...");
+    
+    // Esperar hasta 10 segundos para sincronizar
+    unsigned long start = millis();
+    while (time(nullptr) < 100000 && (millis() - start < 10000)) {
+        delay(100);
+    }
+    
+    if (time(nullptr) >= 100000) {
+        timeSynchronized = true;
+        lastNTPSync = millis();
+        Serial.println("[NTP] Time synchronized successfully");
+        
+        struct tm timeinfo;
+        getLocalTime(&timeinfo);
+        Serial.printf("[NTP] Current time: %02d:%02d:%02d\n", 
+                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    } else {
+        Serial.println("[NTP] Time synchronization failed - will retry later");
+        timeSynchronized = false;
+    }
+}
+
+void ClairDevice::updateNTP() {
+    if (!timeSynchronized && wifi.isConnected()) {
+        // Reintentar sincronización si falló inicialmente
+        unsigned long now = millis();
+        if (now - lastNTPSync > 30000) {  // Reintentar cada 30 segundos
+            lastNTPSync = now;
+            configTime(timezoneOffset, 0, "pool.ntp.org");
+            
+            unsigned long start = millis();
+            while (time(nullptr) < 100000 && (millis() - start < 5000)) {
+                delay(50);
+            }
+            
+            if (time(nullptr) >= 100000) {
+                timeSynchronized = true;
+                Serial.println("[NTP] Time synchronized (retry)");
+            }
+        }
+    }
+    
+    // Resincronizar periódicamente
+    if (timeSynchronized && wifi.isConnected()) {
+        if (millis() - lastNTPSync > ntpSyncInterval) {
+            lastNTPSync = millis();
+            configTime(timezoneOffset, 0, "pool.ntp.org");
+            Serial.println("[NTP] Resynchronizing time...");
+        }
+    }
+}
+
+unsigned long ClairDevice::getCurrentEpoch() {
+    if (timeSynchronized) {
+        return time(nullptr);
+    }
+    return 0;  // No sincronizado
+}
+
+String ClairDevice::getFormattedTime() {
+    if (!timeSynchronized) {
+        return "00:00:00";
+    }
+    
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return "00:00:00";
+    }
+    
+    char buffer[9];
+    sprintf(buffer, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    return String(buffer);
 }
 
 // NUEVO método: Llamar desde update() hasta que INIT_COMPLETE
@@ -119,6 +214,7 @@ void ClairDevice::update() {
         display.autoPowerManagement();
         
         wifi.update();
+        updateNTP();
         
         if (wifi.isConnected() && cloud.isEnabled()) {
             cloud.sendDataThrottled(currentData);
@@ -144,6 +240,21 @@ void ClairDevice::updateAirQualityData() {
     
     // Evaluate overall air quality status
     currentData.evaluateStatus(thresholds);
+
+    // NUEVO: Agregar tiempo real si está sincronizado
+    if (timeSynchronized) {
+        currentData.timeFormatted = getFormattedTime();
+        
+        // Calcular uptime formateado
+        unsigned long uptimeSec = millis() / 1000;
+        unsigned long hours = uptimeSec / 3600;
+        unsigned long minutes = (uptimeSec % 3600) / 60;
+        unsigned long seconds = uptimeSec % 60;
+        
+        char uptimeBuf[9];
+        sprintf(uptimeBuf, "%02d:%02d:%02d", hours, minutes, seconds);
+        currentData.uptimeFormatted = String(uptimeBuf);
+    }
 }
 
 void ClairDevice::updateParticulateMatterData() {

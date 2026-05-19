@@ -37,6 +37,10 @@ struct ClairData {
     AirQualityStatus status;
     String statusLabel;
     String statusIcon;
+
+    // NUEVO: Tiempo real formateado
+    String timeFormatted;    // "HH:MM:SS" para la medición
+    String uptimeFormatted;   // "HH:MM:SS" para el uptime
     
     // Constructor
     ClairData() {
@@ -57,6 +61,9 @@ struct ClairData {
         status = OPTIMAL;
         statusLabel = "Optimal";
         statusIcon = "Optimal";
+
+        timeFormatted = "";
+        uptimeFormatted = "";
     }
     
     // Calculate AQI based on PM2.5

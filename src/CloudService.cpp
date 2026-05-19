@@ -19,85 +19,48 @@ String CloudService::buildPayload(const ClairData& data) {
     
     // Device info
     doc["deviceId"] = hardwareId;
-    doc["timestamp"] = data.timestamp;
-    doc["uptime"] = millis() / 1000; 
+    // NUEVO: timestamp en formato HH:MM:SS
+    if (data.timeFormatted.length() > 0) {
+        doc["timestamp"] = data.timeFormatted;  // String "14:30:25"
+    } else {
+        doc["timestamp"] = data.timestamp;  // Fallback a millis desde boot
+    }
+    
+    // NUEVO: uptime en formato HH:MM:SS
+    if (data.uptimeFormatted.length() > 0) {
+        doc["uptime"] = data.uptimeFormatted;
+    } else {
+        doc["uptime"] = millis() / 1000;
+    }
+
     
     // Air quality data (SCD41)
     JsonObject airQuality = doc.createNestedObject("airQuality");
     if (data.airQuality.valid) {
         airQuality["co2"] = data.airQuality.co2;
         airQuality["temperature"] = data.airQuality.temperature;
-        airQuality["humidity"] = data.airQuality.humidity;
-        airQuality["valid"] = true;
-    } else {
-        airQuality["valid"] = false;
-    }
-    
+        airQuality["humidity"] = data.airQuality.humidity;        
+    } 
+
     // Particulate matter data (PMS5003)
     JsonObject particulate = doc.createNestedObject("particulateMatter");
     if (data.particulateMatter.valid) {
         particulate["pm1_0"] = data.particulateMatter.pm1_0;
         particulate["pm2_5"] = data.particulateMatter.pm2_5;
         particulate["pm10"] = data.particulateMatter.pm10;
-        particulate["valid"] = true;
-    } else {
-        particulate["valid"] = false;
-    }    
+    } 
 
     // Connectivity info
     JsonObject connectivity = doc.createNestedObject("connectivity");
     if (WiFi.status() == WL_CONNECTED) {
-        connectivity["status"] = "connected";
-        connectivity["ssid"] = WiFi.SSID();
-        connectivity["ip"] = WiFi.localIP().toString();
-        connectivity["rssi"] = WiFi.RSSI();
-        connectivity["mac"] = WiFi.macAddress();
-        connectivity["channel"] = WiFi.channel();
+        connectivity["status"] = "connected";        
     } else {
-        connectivity["status"] = "disconnected";
-        connectivity["ssid"] = "none";
-        connectivity["ip"] = "0.0.0.0";
-        connectivity["rssi"] = 0;
-        connectivity["mac"] = WiFi.macAddress();
-        connectivity["channel"] = 0;
-    }
-    
-    // Device health
-    JsonObject health = doc.createNestedObject("deviceHealth");
-    health["freeHeap"] = ESP.getFreeHeap();
-    health["minFreeHeap"] = ESP.getMinFreeHeap();
-    health["heapSize"] = ESP.getHeapSize();
-    health["maxAllocHeap"] = ESP.getMaxAllocHeap();
-    health["scd41Status"] = data.airQuality.valid ? "ok" : "error";
-    health["pms5003Status"] = data.particulateMatter.valid ? "ok" : "error";
-    
-    // Time since last valid sensor reading
-    static unsigned long lastValidAirQualityTime = 0;
-    static unsigned long lastValidPMTime = 0;
-    
-    if (data.airQuality.valid) {
-        lastValidAirQualityTime = millis();
-    }
-    if (data.particulateMatter.valid) {
-        lastValidPMTime = millis();
-    }
-    
-    health["lastValidAirQualitySec"] = (millis() - lastValidAirQualityTime) / 1000;
-    health["lastValidPMSec"] = (millis() - lastValidPMTime) / 1000;
-
-    // Device Info
-    JsonObject deviceInfo = doc.createNestedObject("deviceInfo");
-    deviceInfo["chipModel"] = ESP.getChipModel();
-    deviceInfo["chipRevision"] = ESP.getChipRevision();
-    deviceInfo["cpuFreqMHz"] = ESP.getCpuFreqMHz();
-    deviceInfo["flashSize"] = ESP.getFlashChipSize();
-    deviceInfo["sketchSize"] = ESP.getSketchSize();
-    deviceInfo["freeSketchSpace"] = ESP.getFreeSketchSpace();
+        connectivity["status"] = "disconnected";       
+    }         
     
     // Overall status
     doc["status"] = data.statusLabel;
-    doc["statusCode"] = data.status;
-    doc["created_at"] = data.timestamp / 1000;  // SIMPLIFICADO: número, no string
+ 
     
     String payload;
     serializeJson(doc, payload);
