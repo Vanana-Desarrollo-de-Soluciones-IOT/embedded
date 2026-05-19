@@ -44,35 +44,24 @@ ClairDevice::ClairDevice(int sda, int scl, int rx, int tx, int set, int reset,
 
 // Inicializar sistema
 bool ClairDevice::begin() {
-    bool scd41Ok = scd41Device.getSensor().begin();
-    bool pmsOk = pms5003Device.getSensor().begin();
+    // No esperar a que terminen - iniciar en background
+    bool scd41Started = scd41Device.getSensor().begin();  // Debe ser no-bloqueante
+    bool pmsStarted = pms5003Device.getSensor().begin();
     
-    allSensorsReady = scd41Ok && pmsOk;        
-            
-    if (!pmsOk) {
-        Serial.println("PMS5003 sensor initialization FAILED");
-    }else {
-        Serial.println("PMS5003 sensor initialized successfully");
+    // Iniciar display sin delay
+    display.begin();  // Eliminar el delay(2000) interno
+    
+    allSensorsReady = false;  // Todavía no están listos
+    
+    // Configurar timeout de 10 segundos máximo
+    unsigned long startTime = millis();
+    while (!allSensorsReady && (millis() - startTime < 10000)) {
+        // Permitir que el loop principal continúe
+        update();
+        delay(10);
+        allSensorsReady = scd41Device.getSensor().isInitialized() && 
+                         pms5003Device.getSensor().isInitialized();
     }
-        
-    if (!display.begin()) {
-        Serial.println("OLED display initialization FAILED");
-    }else {
-        Serial.println("OLED display initialized successfully");
-    }
-
-    display.setSleepTimeout(30000);  // 30 second timeout
-    
-    
-    warningLed.off();
-
-    
-    if (allSensorsReady) {
-        forceReport();
-    }
-
-    lastDisplayedStatus = currentData.status;
-    displayInitialized = false;
     
     return allSensorsReady;
 }
