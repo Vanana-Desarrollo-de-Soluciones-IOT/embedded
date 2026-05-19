@@ -8,8 +8,10 @@
 #define WIFI_SSID "Wokwi-GUEST"
 #define WIFI_PASSWORD ""
 
-#define CLOUD_ENDPOINT "https://perraaaaa.com/"
+#define CLOUD_ENDPOINT "https://perraaaaa.free.beeceptor.com/"
 #define DEVICE_ID "CLAIR001"
+#define DEVICE_SECRET "your-device-secret"
+#define CLOUD_SEND_INTERVAL 30000 // 30 seconds
 
 #define CLAIR_SIMULATION_MODE false
 
@@ -42,7 +44,7 @@ void setup() {
     }
 
     clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
-    clair.setupCloud(CLOUD_ENDPOINT, DEVICE_ID, 30000);
+    clair.setupCloud(CLOUD_ENDPOINT, DEVICE_ID, DEVICE_SECRET, CLOUD_SEND_INTERVAL);
     clair.setSimulationEnabled(CLAIR_SIMULATION_MODE);
 }
 

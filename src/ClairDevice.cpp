@@ -284,8 +284,8 @@ void ClairDevice::setupWiFi(const String& ssid, const String& password) {
     wifi.begin(ssid, password);
 }
 
-void ClairDevice::setupCloud(const String& endpoint, const String& deviceId, unsigned long interval) {
-    cloud.begin(endpoint, deviceId, interval);
+void ClairDevice::setupCloud(const String& endpoint, const String& hardwareId, const String& deviceSecret, unsigned long interval) {
+    cloud.begin(endpoint, hardwareId, deviceSecret, interval);
 }
 
 void ClairDevice::setSimulationEnabled(bool enabled) {

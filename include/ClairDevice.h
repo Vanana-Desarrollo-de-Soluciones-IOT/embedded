@@ -123,7 +123,7 @@ public:
 
     // Cloud services
     void setupWiFi(const String& ssid, const String& password);
-    void setupCloud(const String& endpoint, const String& deviceId, unsigned long interval = 30000);
+    void setupCloud(const String& endpoint, const String& hardwareId, const String& deviceSecret, unsigned long interval);
     void setCloudEnabled(bool enabled) { cloud.setEnabled(enabled); }
     bool isCloudEnabled() const { return cloud.isEnabled(); }
 

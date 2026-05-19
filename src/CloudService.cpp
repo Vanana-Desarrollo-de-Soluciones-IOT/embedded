@@ -5,9 +5,10 @@ CloudService::CloudService()
     : enabled(false), lastSendTime(0), sendInterval(30000),
       successfulSends(0), failedSends(0) {}
 
-void CloudService::begin(const String& url, const String& id, unsigned long interval) {
+void CloudService::begin(const String& url, const String& id, const String& secret, unsigned long interval) {
     endpointUrl = url;
-    deviceId = id;
+    hardwareId = id;
+    deviceSecret = secret;
     sendInterval = interval;
     enabled = true;
     // Test connection
@@ -18,7 +19,7 @@ String CloudService::buildPayload(const ClairData& data) {
     JsonDocument doc;
     
     // Device info
-    doc["deviceId"] = deviceId;
+    doc["deviceId"] = hardwareId;
     doc["timestamp"] = data.timestamp;
     doc["uptime"] = millis() / 1000; 
     
@@ -42,9 +43,7 @@ String CloudService::buildPayload(const ClairData& data) {
         particulate["valid"] = true;
     } else {
         particulate["valid"] = false;
-    }
-
-    
+    }    
 
     //Connectivity info
     JsonObject connectivity = doc.createNestedObject("connectivity");
@@ -104,6 +103,13 @@ String CloudService::buildPayload(const ClairData& data) {
     //Overall status
     doc["status"] = data.statusLabel;
     doc["statusCode"] = data.status;
+
+    // Formatear timestamp en ISO 8601
+    char timestamp[32];
+    unsigned long epoch = data.timestamp / 1000; // Asumiendo que timestamp está en ms
+    // Necesitarás sincronizar tiempo con NTP para esto
+    sprintf(timestamp, "%lu", epoch); // Simplificado, idealmente usar time.h
+    doc["created_at"] = timestamp;
     
     String payload;
     serializeJson(doc, payload);
@@ -121,20 +127,22 @@ bool CloudService::sendData(const ClairData& data) {
     
     String payload = buildPayload(data);
     
-    httpClient.begin(endpointUrl);
-    httpClient.addHeader(CONTENT_TYPE_HEADER, APPLICATION_JSON);
+    httpClient.begin(client, endpointUrl);
+    httpClient.addHeader("Content-Type", "application/json");
+    httpClient.addHeader("X-Hardware-Id", hardwareId);
+    httpClient.addHeader("X-Device-Secret", deviceSecret);
     
     int httpResponseCode = httpClient.POST(payload);
     httpClient.end();
     
     if (httpResponseCode == 200 || httpResponseCode == 201) {
         successfulSends++;
-        Serial.println("[CloudService] Data sent successfully");  
+        Serial.println("[CloudService] Data sent successfully");
         return true;
     } else {
         failedSends++;
         Serial.print("[CloudService] Failed to send data. HTTP code: ");
-        Serial.println(httpResponseCode); 
+        Serial.println(httpResponseCode);
         return false;
     }
 }
