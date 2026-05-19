@@ -38,6 +38,19 @@ struct ClairPins {
  */
 class ClairDevice : public Device {
 private:
+
+    enum InitState {
+        INIT_NOT_STARTED,
+        INIT_STARTING_SENSORS,
+        INIT_WAITING_SENSORS,
+        INIT_COMPLETE,
+        INIT_PARTIAL
+    };
+    InitState initState;
+    unsigned long initStartTime;
+    static const unsigned long INIT_TIMEOUT_MS = 10000;  // 10 segundos máximo
+    bool initTimeoutOccurred;
+
     SCD41SensorDevice scd41Device;
     PMS5003SensorDevice pms5003Device;
     OLEDDisplay display;
@@ -68,6 +81,7 @@ private:
     void updateWarningLed();
     void refreshDisplay();
     void updateSimulationData();
+    void updateInitialization();
     
     // Helper method for display
     String getAirQualityLabel(int co2);  // add this line
@@ -133,6 +147,14 @@ public:
      // WiFi status
     bool isWiFiConnected() const { return wifi.isConnected(); }
     String getWiFiIP() const { return wifi.getLocalIP(); }
+    
+    // NUEVO: Verificar si la inicialización está completa
+    bool isInitializationComplete() const { 
+        return initState == INIT_COMPLETE || initState == INIT_PARTIAL; 
+    }
+    
+    // NUEVO: Obtener estado de inicialización
+    const char* getInitStateString() const;
 };
 
 #endif // CLAIR_DEVICE_H
