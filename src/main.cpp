@@ -8,10 +8,10 @@
 #define WIFI_SSID "Wokwi-GUEST"
 #define WIFI_PASSWORD ""
 
-#define CLOUD_ENDPOINT "https://perraaaaa.free.beeceptor.com/"
+#define CLOUD_ENDPOINT "https://perraaaaa.com/"
 #define DEVICE_ID "CLAIR001"
 
-#define CLAIR_SIMULATION_MODE true
+#define CLAIR_SIMULATION_MODE false
 
 ClairDevice clair;
 
