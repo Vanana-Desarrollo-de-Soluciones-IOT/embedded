@@ -29,7 +29,7 @@ private:
     int resetPin;   // Reset module (pulse LOW)
     
     // Communication
-    HardwareSerial* serial;
+    HardwareSerial serial;
     unsigned long readInterval;
     unsigned long lastReadTime;
     
