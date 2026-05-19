@@ -11,8 +11,7 @@
 #include "AirQualityStatus.h"
 #include "RgbLed.h" 
 #include "WiFiService.h"
-#include "CloudService.h"
-#include "RemoteCommandClient.h"
+#include "EdgeService.h"
 
 /**
  * @brief Pin configuration structure for Clair System
@@ -52,7 +51,7 @@ private:
     static const unsigned long INIT_TIMEOUT_MS = 10000;  // 10 segundos máximo
     bool initTimeoutOccurred;
 
-    RemoteCommandClient remoteCmd;
+    EdgeService edge;
     bool standbyMode;  // Indica si el dispositivo está en standby
 
     SCD41SensorDevice scd41Device;
@@ -63,8 +62,7 @@ private:
     ClairData currentData;
     AirQualityThresholds thresholds; 
 
-    WiFiService wifi;
-    CloudService cloud;
+    WiFiService wifi;    
     unsigned long lastCloudSend;
     
     unsigned long lastReportTime;
@@ -159,17 +157,20 @@ public:
         return currentData.statusLabel;
     }
 
-    // Agrega estos métodos
-    void setupRemoteCommands(const String& edgeEndpoint, const String& hardwareId, 
-                             const String& deviceSecret, unsigned long pollInterval = 10000);
+    void setupEdge(const String& baseUrl, const String& hardwareId, const String& deviceSecret,
+               unsigned long telemetryInterval = 15000,
+               unsigned long commandPollInterval = 10000) {
+    edge.begin(baseUrl, hardwareId, deviceSecret, telemetryInterval, commandPollInterval);
+    edge.setCommandCallback(processRemoteCommand);
+}
+
+    // Agrega estos métodos    
     bool isStandbyMode() const { return standbyMode; }
     void setStandbyMode(bool standby);
 
     // Cloud services
     void setupWiFi(const String& ssid, const String& password);
-    void setupCloud(const String& endpoint, const String& hardwareId, const String& deviceSecret, unsigned long interval);
-    void setCloudEnabled(bool enabled) { cloud.setEnabled(enabled); }
-    bool isCloudEnabled() const { return cloud.isEnabled(); }
+    void setupCloud(const String& endpoint, const String& hardwareId, const String& deviceSecret, unsigned long interval);    
 
     void setSimulationEnabled(bool enabled);
     bool isSimulationEnabled() const { return simulationEnabled; }

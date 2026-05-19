@@ -60,13 +60,6 @@ bool ClairDevice::begin() {
     return true;  // Siempre retorna true, la inicialización continúa en background
 }
 
-// Implementar setupRemoteCommands
-void ClairDevice::setupRemoteCommands(const String& edgeEndpoint, const String& hardwareId, 
-                                       const String& deviceSecret, unsigned long pollInterval) {
-    remoteCmd.begin(edgeEndpoint, hardwareId, deviceSecret, pollInterval);
-    Serial.println("[ClairDevice] Remote commands configured");
-}
-
 // Callback estático para procesar comandos
 bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
     Serial.printf("[ClairDevice] Executing remote command: %s\n", cmd.type.c_str());
@@ -232,26 +225,7 @@ const char* ClairDevice::getInitStateString() const {
 }
 
 // Actualizar todos los sensores
-void ClairDevice::update() {
-    // Si estamos en standby, solo consultar comandos y NTP
-    if (standbyMode) {
-        // Consultar comandos remotos con intervalo más largo
-        static unsigned long lastStandbyPoll = 0;
-        unsigned long now = millis();
-        
-        if (now - lastStandbyPoll >= STANDBY_POLL_INTERVAL) {
-            lastStandbyPoll = now;
-            remoteCmd.pollCommands(processRemoteCommand);
-        }
-        
-        // Actualizar NTP ocasionalmente
-        if (now - lastNTPSync > ntpSyncInterval * 2) {
-            updateNTP();
-        }
-        
-        return;  // No procesar sensores en standby
-    }
-
+void ClairDevice::update() {    
     // NUEVO: Gestionar inicialización no bloqueante
     updateInitialization();
     
@@ -279,8 +253,9 @@ void ClairDevice::update() {
         wifi.update();
         updateNTP();
         
-        if (wifi.isConnected() && cloud.isEnabled()) {
-            cloud.sendDataThrottled(currentData);
+        if (wifi.isConnected()) {
+            edge.sendTelemetry(currentData);
+            edge.pollCommands();
         }
         
         unsigned long now = millis();
@@ -511,10 +486,6 @@ String ClairDevice::getAirQualityLabel(int co2) {
 
 void ClairDevice::setupWiFi(const String& ssid, const String& password) {
     wifi.begin(ssid, password);
-}
-
-void ClairDevice::setupCloud(const String& endpoint, const String& hardwareId, const String& deviceSecret, unsigned long interval) {
-    cloud.begin(endpoint, hardwareId, deviceSecret, interval);
 }
 
 void ClairDevice::setSimulationEnabled(bool enabled) {

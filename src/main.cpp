@@ -8,16 +8,12 @@
 #define WIFI_SSID "Wokwi-GUEST"
 #define WIFI_PASSWORD ""
 
-// Configuración del Edge (para comandos)
-#define EDGE_ENDPOINT ""
-
-// Configuración del Cloud (para telemetría) 
-#define CLOUD_ENDPOINT ""
-
+// Simplificado - una sola URL
+#define EDGE_BASE_URL ""
 #define HARDWARE_ID "CLAIR-0001"
-#define DEVICE_SECRET "DWWPmhQcjF7quB-asAvHmWnF47eY0Bvqh26ohQ9e9Vk"
+#define DEVICE_SECRET ""
 
-#define CLOUD_SEND_INTERVAL 15000      // 15 segundos - telemetría al Cloud
+#define CLOUD_SEND_INTERVAL 10000      // 15 segundos - telemetría al Cloud
 #define REMOTE_POLL_INTERVAL 10000     // 10 segundos - comandos desde Edge
 
 #define CLAIR_SIMULATION_MODE false
@@ -25,16 +21,9 @@
 ClairDevice clair;
 
 void printBanner() {
-    Serial.println("\n");
-    Serial.println("   ██████╗██╗      █████╗ ██╗██████╗ ");
-    Serial.println("  ██╔════╝██║     ██╔══██╗██║██╔══██╗");
-    Serial.println("  ██║     ██║     ███████║██║██████╔╝");
-    Serial.println("  ██║     ██║     ██╔══██║██║██╔══██╗");
-    Serial.println("  ╚██████╗███████╗██║  ██║██║██║  ██║");
-    Serial.println("   ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝");
-    Serial.println("                                         ");
-    Serial.println("   Environmental Monitoring System v1.2");
-    Serial.println("   =====================================\n");
+    Serial.println("\n==================================================");
+    Serial.println("     Environmental Monitoring System v1.3");
+    Serial.println("==================================================\n");
 }
 
 void setup() {
@@ -47,11 +36,8 @@ void setup() {
     clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
     clair.beginNTP("pool.ntp.org", -18000);  // -18000 = UTC-5
     
-    // IMPORTANTE: Cloud para enviar TELEMETRÍA
-    clair.setupCloud(CLOUD_ENDPOINT, HARDWARE_ID, DEVICE_SECRET, CLOUD_SEND_INTERVAL);
-    
-    // IMPORTANTE: Remote Commands para recibir COMANDOS
-    clair.setupRemoteCommands(EDGE_ENDPOINT, HARDWARE_ID, DEVICE_SECRET, REMOTE_POLL_INTERVAL);
+    // IMPORTANTE: Edge para enviar TELEMETRÍA y recibir COMANDOS
+    clair.setupEdge(EDGE_BASE_URL, HARDWARE_ID, DEVICE_SECRET, CLOUD_SEND_INTERVAL, REMOTE_POLL_INTERVAL);
     
     clair.setSimulationEnabled(CLAIR_SIMULATION_MODE);
 }
