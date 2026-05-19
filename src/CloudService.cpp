@@ -11,7 +11,6 @@ void CloudService::begin(const String& url, const String& id, const String& secr
     deviceSecret = secret;
     sendInterval = interval;
     enabled = true;
-    // Test connection
     testConnection();
 }
 
@@ -20,96 +19,48 @@ String CloudService::buildPayload(const ClairData& data) {
     
     // Device info
     doc["deviceId"] = hardwareId;
-    doc["timestamp"] = data.timestamp;
-    doc["uptime"] = millis() / 1000; 
+    // NUEVO: timestamp en formato HH:MM:SS
+    if (data.timeFormatted.length() > 0) {
+        doc["timestamp"] = data.timeFormatted;  // String "14:30:25"
+    } else {
+        doc["timestamp"] = data.timestamp;  // Fallback a millis desde boot
+    }
+    
+    // NUEVO: uptime en formato HH:MM:SS
+    if (data.uptimeFormatted.length() > 0) {
+        doc["uptime"] = data.uptimeFormatted;
+    } else {
+        doc["uptime"] = millis() / 1000;
+    }
+
     
     // Air quality data (SCD41)
     JsonObject airQuality = doc.createNestedObject("airQuality");
     if (data.airQuality.valid) {
         airQuality["co2"] = data.airQuality.co2;
         airQuality["temperature"] = data.airQuality.temperature;
-        airQuality["humidity"] = data.airQuality.humidity;
-        airQuality["valid"] = true;
-    } else {
-        airQuality["valid"] = false;
-    }
-    
+        airQuality["humidity"] = data.airQuality.humidity;        
+    } 
+
     // Particulate matter data (PMS5003)
     JsonObject particulate = doc.createNestedObject("particulateMatter");
     if (data.particulateMatter.valid) {
         particulate["pm1_0"] = data.particulateMatter.pm1_0;
         particulate["pm2_5"] = data.particulateMatter.pm2_5;
         particulate["pm10"] = data.particulateMatter.pm10;
-        particulate["valid"] = true;
-    } else {
-        particulate["valid"] = false;
-    }    
+    } 
 
-    //Connectivity info
+    // Connectivity info
     JsonObject connectivity = doc.createNestedObject("connectivity");
-
     if (WiFi.status() == WL_CONNECTED) {
-        connectivity["status"] = "connected";
-        connectivity["ssid"] = WiFi.SSID();
-        connectivity["ip"] = WiFi.localIP().toString();
-        connectivity["rssi"] = WiFi.RSSI();
-        connectivity["mac"] = WiFi.macAddress();
-        connectivity["channel"] = WiFi.channel();
+        connectivity["status"] = "connected";        
     } else {
-        connectivity["status"] = "disconnected";
-        connectivity["ssid"] = "none";
-        connectivity["ip"] = "0.0.0.0";
-        connectivity["rssi"] = 0;
-        connectivity["mac"] = WiFi.macAddress();
-        connectivity["channel"] = 0;
-    }
+        connectivity["status"] = "disconnected";       
+    }         
     
-    // Device health
-    JsonObject health = doc.createNestedObject("deviceHealth");
-    
-    // Free heap and memory stats
-    health["freeHeap"] = ESP.getFreeHeap();
-    health["minFreeHeap"] = ESP.getMinFreeHeap();
-    health["heapSize"] = ESP.getHeapSize();
-    health["maxAllocHeap"] = ESP.getMaxAllocHeap();
-    
-    // Sensor status
-    health["scd41Status"] = data.airQuality.valid ? "ok" : "error";
-    health["pms5003Status"] = data.particulateMatter.valid ? "ok" : "error";
-    
-    // Time since last valid sensor reading
-    static unsigned long lastValidAirQualityTime = 0;
-    static unsigned long lastValidPMTime = 0;
-    
-    if (data.airQuality.valid) {
-        lastValidAirQualityTime = millis();
-    }
-    if (data.particulateMatter.valid) {
-        lastValidPMTime = millis();
-    }
-    
-    health["lastValidAirQualitySec"] = (millis() - lastValidAirQualityTime) / 1000;
-    health["lastValidPMSec"] = (millis() - lastValidPMTime) / 1000;
-
-    //Device Info
-    JsonObject deviceInfo = doc.createNestedObject("deviceInfo");
-    deviceInfo["chipModel"] = ESP.getChipModel();
-    deviceInfo["chipRevision"] = ESP.getChipRevision();
-    deviceInfo["cpuFreqMHz"] = ESP.getCpuFreqMHz();
-    deviceInfo["flashSize"] = ESP.getFlashChipSize();
-    deviceInfo["sketchSize"] = ESP.getSketchSize();
-    deviceInfo["freeSketchSpace"] = ESP.getFreeSketchSpace();
-    
-    //Overall status
+    // Overall status
     doc["status"] = data.statusLabel;
-    doc["statusCode"] = data.status;
-
-    // Formatear timestamp en ISO 8601
-    char timestamp[32];
-    unsigned long epoch = data.timestamp / 1000; // Asumiendo que timestamp está en ms
-    // Necesitarás sincronizar tiempo con NTP para esto
-    sprintf(timestamp, "%lu", epoch); // Simplificado, idealmente usar time.h
-    doc["created_at"] = timestamp;
+ 
     
     String payload;
     serializeJson(doc, payload);
@@ -125,12 +76,22 @@ bool CloudService::sendData(const ClairData& data) {
         return false;
     }
     
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[CloudService] WiFi not connected");
+        return false;
+    }
+    
     String payload = buildPayload(data);
+    
+    // Opcional: descomentar para debug del payload
+    // Serial.print("[CloudService] Payload: ");
+    // Serial.println(payload);
     
     httpClient.begin(endpointUrl);
     httpClient.addHeader("Content-Type", "application/json");
     httpClient.addHeader("X-Hardware-Id", hardwareId);
     httpClient.addHeader("X-Device-Secret", deviceSecret);
+    httpClient.setTimeout(5000);  // Timeout de 5 segundos
     
     int httpResponseCode = httpClient.POST(payload);
     httpClient.end();
@@ -139,12 +100,20 @@ bool CloudService::sendData(const ClairData& data) {
         successfulSends++;
         Serial.println("[CloudService] Data sent successfully");
         return true;
-    } else {
-        failedSends++;
-        Serial.print("[CloudService] Failed to send data. HTTP code: ");
-        Serial.println(httpResponseCode);
-        return false;
     }
+    
+    failedSends++;
+    
+    // Logging más informativo
+    if (httpResponseCode > 0) {
+        Serial.printf("[CloudService] HTTP error: %d\n", httpResponseCode);
+    } else if (httpResponseCode == -1) {
+        Serial.println("[CloudService] Connection timeout");
+    } else {
+        Serial.printf("[CloudService] Connection error: %d\n", httpResponseCode);
+    }
+    
+    return false;
 }
 
 bool CloudService::sendDataThrottled(const ClairData& data) {
@@ -161,7 +130,6 @@ bool CloudService::sendDataThrottled(const ClairData& data) {
 bool CloudService::testConnection() {
     if (endpointUrl.length() == 0) return false;
     
-    // Solo verificar que la URL es válida, no hacer GET
     Serial.println("[CloudService] Cloud service configured with URL: " + endpointUrl);
-    return true;  // Asumir que está bien configurado
+    return true;
 }

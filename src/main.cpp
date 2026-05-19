@@ -11,7 +11,7 @@
 #define CLOUD_ENDPOINT ""
 #define DEVICE_ID "CLAIR-0001"
 #define DEVICE_SECRET "fOIP-dIzEnXmirN8edZyY91f98wcskUFAAI_6E78uw8"
-#define CLOUD_SEND_INTERVAL 30000 // 30 seconds
+#define CLOUD_SEND_INTERVAL 10000 // 30 seconds
 
 #define CLAIR_SIMULATION_MODE false
 
@@ -37,14 +37,10 @@ void setup() {
     
     printBanner();
     
-    // begin() ahora es NO bloqueante
-    if (clair.begin()) {
-        Serial.println("System initialization started in background");
-    } else {
-        Serial.println("Failed to start system initialization");
-    }
-    
+    clair.begin();
     clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
+    clair.beginNTP("pool.ntp.org", -18000);  // -18000 = UTC-5
+    
     clair.setupCloud(CLOUD_ENDPOINT, DEVICE_ID, DEVICE_SECRET, CLOUD_SEND_INTERVAL);
     clair.setSimulationEnabled(CLAIR_SIMULATION_MODE);
 }
