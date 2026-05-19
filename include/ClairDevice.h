@@ -12,6 +12,7 @@
 #include "RgbLed.h" 
 #include "WiFiService.h"
 #include "CloudService.h"
+#include "RemoteCommandClient.h"
 
 /**
  * @brief Pin configuration structure for Clair System
@@ -51,6 +52,9 @@ private:
     static const unsigned long INIT_TIMEOUT_MS = 10000;  // 10 segundos máximo
     bool initTimeoutOccurred;
 
+    RemoteCommandClient remoteCmd;
+    bool standbyMode;  // Indica si el dispositivo está en standby
+
     SCD41SensorDevice scd41Device;
     PMS5003SensorDevice pms5003Device;
     OLEDDisplay display;
@@ -82,6 +86,9 @@ private:
     void refreshDisplay();
     void updateSimulationData();
     void updateInitialization();
+
+    // Callback para procesar comandos remotos
+    static bool processRemoteCommand(const RemoteCommand& cmd);
     
     // Helper method for display
     String getAirQualityLabel(int co2);  // add this line
@@ -103,6 +110,11 @@ public:
     static const int CLAIR_REPORT_COMMAND = 1000;
     static const int CLAIR_CALIBRATE_COMMAND = 1001;
     static const int CLAIR_RESET_COMMAND = 1002;
+
+    // NUEVOS: Comandos remotos
+    static const int REMOTE_STANDBY_COMMAND = 2000;
+    static const int REMOTE_WAKE_COMMAND = 2001;
+    static const int REMOTE_RESTART_COMMAND = 2002;
     
     // Constructor with pin struct
     ClairDevice(const ClairPins& pins = ClairPins(), 
@@ -146,6 +158,12 @@ public:
     String getCurrentStatusLabel() const {
         return currentData.statusLabel;
     }
+
+    // Agrega estos métodos
+    void setupRemoteCommands(const String& edgeEndpoint, const String& hardwareId, 
+                             const String& deviceSecret, unsigned long pollInterval = 10000);
+    bool isStandbyMode() const { return standbyMode; }
+    void setStandbyMode(bool standby);
 
     // Cloud services
     void setupWiFi(const String& ssid, const String& password);

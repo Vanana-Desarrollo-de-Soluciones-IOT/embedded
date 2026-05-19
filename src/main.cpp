@@ -8,10 +8,17 @@
 #define WIFI_SSID "Wokwi-GUEST"
 #define WIFI_PASSWORD ""
 
+// Configuración del Edge (para comandos)
+#define EDGE_ENDPOINT ""
+
+// Configuración del Cloud (para telemetría) 
 #define CLOUD_ENDPOINT ""
-#define DEVICE_ID "CLAIR-0001"
-#define DEVICE_SECRET "fOIP-dIzEnXmirN8edZyY91f98wcskUFAAI_6E78uw8"
-#define CLOUD_SEND_INTERVAL 10000 // 30 seconds
+
+#define HARDWARE_ID "CLAIR-0001"
+#define DEVICE_SECRET "DWWPmhQcjF7quB-asAvHmWnF47eY0Bvqh26ohQ9e9Vk"
+
+#define CLOUD_SEND_INTERVAL 15000      // 15 segundos - telemetría al Cloud
+#define REMOTE_POLL_INTERVAL 10000     // 10 segundos - comandos desde Edge
 
 #define CLAIR_SIMULATION_MODE false
 
@@ -30,7 +37,6 @@ void printBanner() {
     Serial.println("   =====================================\n");
 }
 
-
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -41,20 +47,24 @@ void setup() {
     clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
     clair.beginNTP("pool.ntp.org", -18000);  // -18000 = UTC-5
     
-    clair.setupCloud(CLOUD_ENDPOINT, DEVICE_ID, DEVICE_SECRET, CLOUD_SEND_INTERVAL);
+    // IMPORTANTE: Cloud para enviar TELEMETRÍA
+    clair.setupCloud(CLOUD_ENDPOINT, HARDWARE_ID, DEVICE_SECRET, CLOUD_SEND_INTERVAL);
+    
+    // IMPORTANTE: Remote Commands para recibir COMANDOS
+    clair.setupRemoteCommands(EDGE_ENDPOINT, HARDWARE_ID, DEVICE_SECRET, REMOTE_POLL_INTERVAL);
+    
     clair.setSimulationEnabled(CLAIR_SIMULATION_MODE);
 }
 
 void loop() {
-    clair.update();  // Aquí se completa la inicialización gradualmente
+    clair.update();
     delay(50);
     
-    // Opcional: monitorear estado de inicialización
-    static unsigned long lastStatusPrint = 0;
-    if (millis() - lastStatusPrint > 5000 && !clair.isInitializationComplete()) {
-        Serial.print("Initialization state: ");
-        Serial.println(clair.getInitStateString());
-        lastStatusPrint = millis();
+    // Mostrar estado del modo standby si cambió
+    static bool lastStandbyState = false;
+    if (clair.isStandbyMode() != lastStandbyState) {
+        lastStandbyState = clair.isStandbyMode();
+        Serial.print("Standby mode: ");
+        Serial.println(lastStandbyState ? "ACTIVE" : "INACTIVE");
     }
 }
-

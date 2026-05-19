@@ -9,6 +9,7 @@ static const unsigned long SIM_PHASE_CRITICAL_DURATION = 3000UL;
 static const unsigned long SIM_CYCLE_DURATION = SIM_PHASE_OPTIMAL_DURATION + 
                                                   SIM_PHASE_MODERATE_DURATION + 
                                                   SIM_PHASE_CRITICAL_DURATION;
+static const unsigned long STANDBY_POLL_INTERVAL = 60000;  // En standby, consultar cada 60 segundos
 
 // Constructor con struct
 ClairDevice::ClairDevice(const ClairPins& pins, 
@@ -34,7 +35,8 @@ ClairDevice::ClairDevice(const ClairPins& pins,
       timeSynchronized(false),
       lastNTPSync(0),
       ntpSyncInterval(3600000),  // 1 hora
-      timezoneOffset(-18000) {}  // UTC-5 por defecto
+      timezoneOffset(-18000), // UTC-5 por defecto
+      standbyMode(false) {}  
 
 // Inicializar sistema
 bool ClairDevice::begin() {
@@ -57,6 +59,48 @@ bool ClairDevice::begin() {
     // No esperar aquí - la inicialización continuará en update()
     return true;  // Siempre retorna true, la inicialización continúa en background
 }
+
+// Implementar setupRemoteCommands
+void ClairDevice::setupRemoteCommands(const String& edgeEndpoint, const String& hardwareId, 
+                                       const String& deviceSecret, unsigned long pollInterval) {
+    remoteCmd.begin(edgeEndpoint, hardwareId, deviceSecret, pollInterval);
+    Serial.println("[ClairDevice] Remote commands configured");
+}
+
+// Callback estático para procesar comandos
+bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
+    Serial.printf("[ClairDevice] Executing remote command: %s\n", cmd.type.c_str());
+    
+    if (cmd.type == "STANDBY") {
+        // Entrar en modo standby
+        // Guardar estado actual y apagar periféricos no esenciales
+        return true;
+    }
+    else if (cmd.type == "WAKE") {
+        // Salir del modo standby
+        return true;
+    }
+    else if (cmd.type == "RESTART") {
+        // Reiniciar el dispositivo
+        Serial.println("[ClairDevice] Restarting...");
+        delay(100);
+        ESP.restart();
+        return true;
+    }
+    else if (cmd.type == "REPORT") {
+        // Forzar reporte
+        // Usar el comando existente
+        return true;
+    }
+    else if (cmd.type == "CALIBRATE") {
+        // Calibrar sensor
+        return true;
+    }
+    
+    Serial.printf("[ClairDevice] Unknown command type: %s\n", cmd.type.c_str());
+    return false;
+}
+
 
 void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
     this->timezoneOffset = timezoneOffset;
@@ -189,6 +233,25 @@ const char* ClairDevice::getInitStateString() const {
 
 // Actualizar todos los sensores
 void ClairDevice::update() {
+    // Si estamos en standby, solo consultar comandos y NTP
+    if (standbyMode) {
+        // Consultar comandos remotos con intervalo más largo
+        static unsigned long lastStandbyPoll = 0;
+        unsigned long now = millis();
+        
+        if (now - lastStandbyPoll >= STANDBY_POLL_INTERVAL) {
+            lastStandbyPoll = now;
+            remoteCmd.pollCommands(processRemoteCommand);
+        }
+        
+        // Actualizar NTP ocasionalmente
+        if (now - lastNTPSync > ntpSyncInterval * 2) {
+            updateNTP();
+        }
+        
+        return;  // No procesar sensores en standby
+    }
+
     // NUEVO: Gestionar inicialización no bloqueante
     updateInitialization();
     
@@ -227,6 +290,42 @@ void ClairDevice::update() {
         }
     }
 }
+
+// Implementar setStandbyMode
+void ClairDevice::setStandbyMode(bool standby) {
+    if (standbyMode == standby) return;
+    
+    standbyMode = standby;
+    
+    if (standbyMode) {
+        Serial.println("[ClairDevice] Entering STANDBY mode");
+        
+        // Apagar display
+        display.off();
+        
+        // Apagar LED de advertencia
+        warningLed.off();
+        
+        // Poner sensores en sleep (si soportan)
+        // scd41 no tiene sleep fácil, pero podemos leer menos frecuente
+        // pms5003Device.getSensor().sleep();
+        
+        // Cambiar intervalo de polling remoto
+        // Se maneja en update()
+    } else {
+        Serial.println("[ClairDevice] Exiting STANDBY mode");
+        
+        // Encender display
+        display.on();
+        
+        // Reanudar sensores
+        // pms5003Device.getSensor().wake();
+        
+        // Forzar lectura inmediata
+        forceReport();
+    }
+}
+
 
 void ClairDevice::updateAirQualityData() {
     if (scd41Device.getSensor().isInitialized()) {

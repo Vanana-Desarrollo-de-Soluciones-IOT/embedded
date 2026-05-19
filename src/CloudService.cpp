@@ -14,25 +14,37 @@ void CloudService::begin(const String& url, const String& id, const String& secr
     testConnection();
 }
 
+// Máxima eficiencia - usa operadores ternarios y valores predefinidos
+int calculateSimpleHealth(const ClairData& data) {
+    int health = 100;
+    
+    // Todo en una línea de cálculo
+    health -= (data.airQuality.valid ? 0 : 25);
+    health -= (data.particulateMatter.valid ? 0 : 25);
+    health -= (WiFi.status() == WL_CONNECTED ? (WiFi.RSSI() < -70 ? 15 : 0) : 30);
+    
+    return (health < 0) ? 0 : (health > 100 ? 100 : health);
+}
+
 String CloudService::buildPayload(const ClairData& data) {
     JsonDocument doc;
     
     // Device info
     doc["deviceId"] = hardwareId;
-    // NUEVO: timestamp en formato HH:MM:SS
+    
+    // timestamp en formato HH:MM:SS
     if (data.timeFormatted.length() > 0) {
-        doc["timestamp"] = data.timeFormatted;  // String "14:30:25"
+        doc["timestamp"] = data.timeFormatted;
     } else {
-        doc["timestamp"] = data.timestamp;  // Fallback a millis desde boot
+        doc["timestamp"] = data.timestamp;
     }
     
-    // NUEVO: uptime en formato HH:MM:SS
+    // uptime en formato HH:MM:SS
     if (data.uptimeFormatted.length() > 0) {
         doc["uptime"] = data.uptimeFormatted;
     } else {
         doc["uptime"] = millis() / 1000;
     }
-
     
     // Air quality data (SCD41)
     JsonObject airQuality = doc.createNestedObject("airQuality");
@@ -53,19 +65,30 @@ String CloudService::buildPayload(const ClairData& data) {
     // Connectivity info
     JsonObject connectivity = doc.createNestedObject("connectivity");
     if (WiFi.status() == WL_CONNECTED) {
-        connectivity["status"] = "connected";        
+        connectivity["status"] = "connected";     
+        connectivity["network"] = WiFi.SSID();
+        connectivity["signalStrength"] = WiFi.RSSI();  // dBm
     } else {
-        connectivity["status"] = "disconnected";       
+        connectivity["status"] = "disconnected"; 
+        connectivity["network"] = "none";
+        connectivity["signalStrength"] = 0;
     }         
+
+    // Location info
+    JsonObject location = doc.createNestedObject("location");
+    location["country"] = data.country;
+    
+    // Health Status - Cálculo simple y rápido
+    doc["healthStatus"] = calculateSimpleHealth(data);
     
     // Overall status
     doc["status"] = data.statusLabel;
- 
     
     String payload;
     serializeJson(doc, payload);
     return payload;
 }
+
 
 bool CloudService::sendData(const ClairData& data) {
     if (!enabled) {
