@@ -11,7 +11,6 @@ void CloudService::begin(const String& url, const String& id, const String& secr
     deviceSecret = secret;
     sendInterval = interval;
     enabled = true;
-    // Test connection
     testConnection();
 }
 
@@ -45,9 +44,8 @@ String CloudService::buildPayload(const ClairData& data) {
         particulate["valid"] = false;
     }    
 
-    //Connectivity info
+    // Connectivity info
     JsonObject connectivity = doc.createNestedObject("connectivity");
-
     if (WiFi.status() == WL_CONNECTED) {
         connectivity["status"] = "connected";
         connectivity["ssid"] = WiFi.SSID();
@@ -66,14 +64,10 @@ String CloudService::buildPayload(const ClairData& data) {
     
     // Device health
     JsonObject health = doc.createNestedObject("deviceHealth");
-    
-    // Free heap and memory stats
     health["freeHeap"] = ESP.getFreeHeap();
     health["minFreeHeap"] = ESP.getMinFreeHeap();
     health["heapSize"] = ESP.getHeapSize();
     health["maxAllocHeap"] = ESP.getMaxAllocHeap();
-    
-    // Sensor status
     health["scd41Status"] = data.airQuality.valid ? "ok" : "error";
     health["pms5003Status"] = data.particulateMatter.valid ? "ok" : "error";
     
@@ -91,7 +85,7 @@ String CloudService::buildPayload(const ClairData& data) {
     health["lastValidAirQualitySec"] = (millis() - lastValidAirQualityTime) / 1000;
     health["lastValidPMSec"] = (millis() - lastValidPMTime) / 1000;
 
-    //Device Info
+    // Device Info
     JsonObject deviceInfo = doc.createNestedObject("deviceInfo");
     deviceInfo["chipModel"] = ESP.getChipModel();
     deviceInfo["chipRevision"] = ESP.getChipRevision();
@@ -100,16 +94,10 @@ String CloudService::buildPayload(const ClairData& data) {
     deviceInfo["sketchSize"] = ESP.getSketchSize();
     deviceInfo["freeSketchSpace"] = ESP.getFreeSketchSpace();
     
-    //Overall status
+    // Overall status
     doc["status"] = data.statusLabel;
     doc["statusCode"] = data.status;
-
-    // Formatear timestamp en ISO 8601
-    char timestamp[32];
-    unsigned long epoch = data.timestamp / 1000; // Asumiendo que timestamp está en ms
-    // Necesitarás sincronizar tiempo con NTP para esto
-    sprintf(timestamp, "%lu", epoch); // Simplificado, idealmente usar time.h
-    doc["created_at"] = timestamp;
+    doc["created_at"] = data.timestamp / 1000;  // SIMPLIFICADO: número, no string
     
     String payload;
     serializeJson(doc, payload);
@@ -125,12 +113,22 @@ bool CloudService::sendData(const ClairData& data) {
         return false;
     }
     
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[CloudService] WiFi not connected");
+        return false;
+    }
+    
     String payload = buildPayload(data);
+    
+    // Opcional: descomentar para debug del payload
+    // Serial.print("[CloudService] Payload: ");
+    // Serial.println(payload);
     
     httpClient.begin(endpointUrl);
     httpClient.addHeader("Content-Type", "application/json");
     httpClient.addHeader("X-Hardware-Id", hardwareId);
     httpClient.addHeader("X-Device-Secret", deviceSecret);
+    httpClient.setTimeout(5000);  // Timeout de 5 segundos
     
     int httpResponseCode = httpClient.POST(payload);
     httpClient.end();
@@ -139,12 +137,20 @@ bool CloudService::sendData(const ClairData& data) {
         successfulSends++;
         Serial.println("[CloudService] Data sent successfully");
         return true;
-    } else {
-        failedSends++;
-        Serial.print("[CloudService] Failed to send data. HTTP code: ");
-        Serial.println(httpResponseCode);
-        return false;
     }
+    
+    failedSends++;
+    
+    // Logging más informativo
+    if (httpResponseCode > 0) {
+        Serial.printf("[CloudService] HTTP error: %d\n", httpResponseCode);
+    } else if (httpResponseCode == -1) {
+        Serial.println("[CloudService] Connection timeout");
+    } else {
+        Serial.printf("[CloudService] Connection error: %d\n", httpResponseCode);
+    }
+    
+    return false;
 }
 
 bool CloudService::sendDataThrottled(const ClairData& data) {
@@ -161,7 +167,6 @@ bool CloudService::sendDataThrottled(const ClairData& data) {
 bool CloudService::testConnection() {
     if (endpointUrl.length() == 0) return false;
     
-    // Solo verificar que la URL es válida, no hacer GET
     Serial.println("[CloudService] Cloud service configured with URL: " + endpointUrl);
-    return true;  // Asumir que está bien configurado
+    return true;
 }
