@@ -15,32 +15,24 @@ OLEDDisplay::~OLEDDisplay() {}
 
 // Initialize display
 bool OLEDDisplay::begin() {       
-    // Initialize I2C
     Wire.begin(sdaPin, sclPin);
-    Wire.setClock(400000);  // Fast I2C for display
+    Wire.setClock(400000);
     
-    // Initialize display
     if (!display.begin(SSD1306_SWITCHCAPVCC, i2cAddress)) {
         Serial.println("OLED display not found");
-        Serial.printf("  Check I2C connections (SDA=%d, SCL=%d)\n", sdaPin, sclPin);
-        Serial.printf("  I2C address: 0x%02X\n", i2cAddress);
         return false;
     }
     
     initialized = true;
     currentState = DISPLAY_ON;
     
-    // Configure display
+    // Eliminar el delay(2000) y mostrar inicio rápido
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
     display.setCursor(0, 0);
     display.println("Clair System");
-    display.println("Initializing...");
-    display.display();    
-    
-    delay(2000);
-    clear();
+    display.println("Starting...");
+    display.display();
     
     return true;
 }

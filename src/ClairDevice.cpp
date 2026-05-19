@@ -18,98 +18,117 @@ ClairDevice::ClairDevice(const ClairPins& pins,
       simulationEnabled(false),
       simulationStartTime(0),
       lastDisplayedStatus(OPTIMAL),
-      displayInitialized(false) {}
-
-// Constructor with individual parameters
-ClairDevice::ClairDevice(int sda, int scl, int rx, int tx, int set, int reset,
-                         unsigned long scd41Interval,
-                         unsigned long pmsInterval,
-                         unsigned long reportInterval,
-                         int displaySda,
-                         int displayScl,
-                         int rgbRedPin,
-                         int rgbGreenPin,
-                         int rgbBluePin)
-    : scd41Device(sda, scl, scd41Interval),
-      pms5003Device(rx, tx, set, reset, pmsInterval),
-      display(128, 64, displaySda, displayScl, 0x3C, this),
-      warningLed(rgbRedPin, rgbGreenPin, rgbBluePin, false, false, false, this, true),
-      lastReportTime(0),
-      reportInterval(reportInterval),
-      allSensorsReady(false),
-      simulationEnabled(false),
-      simulationStartTime(0),
-      lastDisplayedStatus(OPTIMAL),
-      displayInitialized(false) {}
+      displayInitialized(false),
+      initState(INIT_NOT_STARTED),
+      initStartTime(0),
+      initTimeoutOccurred(false) {}
 
 // Inicializar sistema
 bool ClairDevice::begin() {
-    bool scd41Ok = scd41Device.getSensor().begin();
-    bool pmsOk = pms5003Device.getSensor().begin();
+    // Iniciar proceso de inicialización NO bloqueante
+    initState = INIT_STARTING_SENSORS;
+    initStartTime = millis();
+    initTimeoutOccurred = false;
+    allSensorsReady = false;
     
-    allSensorsReady = scd41Ok && pmsOk;        
-            
-    if (!pmsOk) {
-        Serial.println("PMS5003 sensor initialization FAILED");
-    }else {
-        Serial.println("PMS5003 sensor initialized successfully");
+    Serial.println("[ClairDevice] Starting non-blocking initialization...");
+    
+    // Iniciar sensores (son operaciones rápidas, no bloqueantes)
+    scd41Device.getSensor().begin();
+    pms5003Device.getSensor().begin();
+    display.begin();
+    
+    // Pasar al estado de espera
+    initState = INIT_WAITING_SENSORS;
+    
+    // No esperar aquí - la inicialización continuará en update()
+    return true;  // Siempre retorna true, la inicialización continúa en background
+}
+
+// NUEVO método: Llamar desde update() hasta que INIT_COMPLETE
+void ClairDevice::updateInitialization() {
+    if (initState == INIT_COMPLETE || initState == INIT_PARTIAL) {
+        return;  // Ya terminó
     }
+    
+    unsigned long now = millis();
+    
+    if (initState == INIT_WAITING_SENSORS) {
+        bool scd41Ready = scd41Device.getSensor().isInitialized();
+        bool pmsReady = pms5003Device.getSensor().isInitialized();
         
-    if (!display.begin()) {
-        Serial.println("OLED display initialization FAILED");
-    }else {
-        Serial.println("OLED display initialized successfully");
+        if (scd41Ready && pmsReady) {
+            initState = INIT_COMPLETE;
+            allSensorsReady = true;
+            Serial.println("[ClairDevice] All sensors initialized successfully!");
+        }
+        else if (now - initStartTime >= INIT_TIMEOUT_MS) {
+            // Timeout - continuar con los sensores que funcionan
+            initTimeoutOccurred = true;
+            
+            if (scd41Ready || pmsReady) {
+                initState = INIT_PARTIAL;
+                allSensorsReady = false;  // No todos están listos, pero podemos operar
+                Serial.print("[ClairDevice] Initialization partial. SCD41: ");
+                Serial.print(scd41Ready ? "OK" : "FAIL");
+                Serial.print(", PMS5003: ");
+                Serial.println(pmsReady ? "OK" : "FAIL");
+            } else {
+                initState = INIT_PARTIAL;
+                Serial.println("[ClairDevice] WARNING: No sensors initialized!");
+            }
+        }
     }
+}
 
-    display.setSleepTimeout(30000);  // 30 second timeout
-    
-    
-    warningLed.off();
-
-    
-    if (allSensorsReady) {
-        forceReport();
+const char* ClairDevice::getInitStateString() const {
+    switch (initState) {
+        case INIT_NOT_STARTED: return "NOT_STARTED";
+        case INIT_STARTING_SENSORS: return "STARTING";
+        case INIT_WAITING_SENSORS: return "WAITING";
+        case INIT_COMPLETE: return "COMPLETE";
+        case INIT_PARTIAL: return "PARTIAL";
+        default: return "UNKNOWN";
     }
-
-    lastDisplayedStatus = currentData.status;
-    displayInitialized = false;
-    
-    return allSensorsReady;
 }
 
 // Actualizar todos los sensores
 void ClairDevice::update() {
-    if (simulationEnabled) {
-        updateSimulationData();
-    } else {
-        scd41Device.update();
-        pms5003Device.update();
-        updateAirQualityData();
-        updateParticulateMatterData();
-    }
+    // NUEVO: Gestionar inicialización no bloqueante
+    updateInitialization();
     
-    updateWarningLed();
-    if (!displayInitialized || currentData.status != lastDisplayedStatus) {
-        refreshDisplay();
-        lastDisplayedStatus = currentData.status;
-        displayInitialized = true;
-    }
-    display.autoPowerManagement();
-    
-    // Update WiFi
-    wifi.update();
-    
-    // Send data to the cloud if WiFi is connected
-    if (wifi.isConnected() && cloud.isEnabled()) {
-        if (cloud.sendDataThrottled(currentData)) {
-            // Success is handled inside sendDataThrottled
+    // Solo procesar sensores si la inicialización avanzó lo suficiente
+    if (initState == INIT_COMPLETE || initState == INIT_PARTIAL) {
+        if (simulationEnabled) {
+            updateSimulationData();
+        } else {
+            scd41Device.update();
+            pms5003Device.update();
+            updateAirQualityData();
+            updateParticulateMatterData();
         }
-    }
-    
-    unsigned long now = millis();
-    if (now - lastReportTime >= reportInterval) {
-        generateUnifiedReport();
-        lastReportTime = now;
+        
+        updateWarningLed();
+        
+        // Resto del código igual...
+        if (!displayInitialized || currentData.status != lastDisplayedStatus) {
+            refreshDisplay();
+            lastDisplayedStatus = currentData.status;
+            displayInitialized = true;
+        }
+        display.autoPowerManagement();
+        
+        wifi.update();
+        
+        if (wifi.isConnected() && cloud.isEnabled()) {
+            cloud.sendDataThrottled(currentData);
+        }
+        
+        unsigned long now = millis();
+        if (now - lastReportTime >= reportInterval) {
+            generateUnifiedReport();
+            lastReportTime = now;
+        }
     }
 }
 

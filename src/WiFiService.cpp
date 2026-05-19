@@ -1,9 +1,14 @@
+// WiFiService.cpp - Versión corregida (sin delay bloqueante)
+
 #include "WiFiService.h"
 
 WiFiService::WiFiService() 
-    : connected(false), lastReconnectAttempt(0), 
-      reconnectInterval(30000), connectionAttempts(0),
-      onConnectedCallback(nullptr), onDisconnectedCallback(nullptr) {}
+    : state(WiFiConnectionState::DISCONNECTED),
+      stateStartTime(0),
+      reconnectDelayStart(0),
+      connectionAttempts(0),
+      onConnectedCallback(nullptr),
+      onDisconnectedCallback(nullptr) {}
 
 void WiFiService::begin(const String& wifiSSID, const String& wifiPassword) {
     ssid = wifiSSID;
@@ -11,55 +16,69 @@ void WiFiService::begin(const String& wifiSSID, const String& wifiPassword) {
     
     WiFi.mode(WIFI_STA);
     
-    connect();
+    // Iniciar conexión sin bloquear
+    changeState(WiFiConnectionState::CONNECTING);
+    WiFi.begin(ssid.c_str(), password.c_str());
+    stateStartTime = millis();
+}
+
+void WiFiService::changeState(WiFiConnectionState newState) {
+    state = newState;
+    stateStartTime = millis();
 }
 
 void WiFiService::update() {
-    if (WiFi.status() == WL_CONNECTED) {
-        if (!connected) {
-            connected = true;
-            connectionAttempts = 0;
-            if (onConnectedCallback) onConnectedCallback();
-        }
-    } else {
-        if (connected) {
-            connected = false;
-            if (onDisconnectedCallback) onDisconnectedCallback();
-        }
-        
-        // Attempt reconnection
-        unsigned long now = millis();
-        if (now - lastReconnectAttempt >= reconnectInterval) {
-            lastReconnectAttempt = now;
-            connect(5000);
-        }
-    }
-}
-
-bool WiFiService::connect(unsigned long timeoutMs) {
-    if (ssid.length() == 0) {
-        return false;
-    }
+    unsigned long now = millis();
     
-    WiFi.begin(ssid.c_str(), password.c_str());
-    
-    unsigned long startTime = millis();
-    while (WiFi.status() != WL_CONNECTED) {
-        if (millis() - startTime > timeoutMs) {
-            connectionAttempts++;
-            return false;
-        }
-        delay(500);
+    switch (state) {
+        case WiFiConnectionState::CONNECTING:
+            // Verificar si ya conectó
+            if (WiFi.status() == WL_CONNECTED) {
+                changeState(WiFiConnectionState::CONNECTED);
+                connectionAttempts = 0;
+                if (onConnectedCallback) onConnectedCallback();
+                Serial.println("[WiFi] Connected successfully");
+            }
+            // Verificar timeout
+            else if (now - stateStartTime >= CONNECT_TIMEOUT_MS) {
+                Serial.println("[WiFi] Connection timeout");
+                WiFi.disconnect();  // Limpiar estado
+                changeState(WiFiConnectionState::RECONNECT_DELAY);
+                reconnectDelayStart = now;
+                connectionAttempts++;
+            }
+            break;
+            
+        case WiFiConnectionState::CONNECTED:
+            // Monitorear si se perdió la conexión
+            if (WiFi.status() != WL_CONNECTED) {
+                Serial.println("[WiFi] Connection lost");
+                changeState(WiFiConnectionState::RECONNECT_DELAY);
+                reconnectDelayStart = now;
+                if (onDisconnectedCallback) onDisconnectedCallback();
+            }
+            break;
+            
+        case WiFiConnectionState::RECONNECT_DELAY:
+            // Esperar antes de reintentar
+            if (now - reconnectDelayStart >= RECONNECT_INTERVAL_MS) {
+                Serial.println("[WiFi] Attempting reconnection...");
+                changeState(WiFiConnectionState::CONNECTING);
+                WiFi.begin(ssid.c_str(), password.c_str());
+            }
+            break;
+            
+        case WiFiConnectionState::DISCONNECTED:
+        default:
+            // No hacer nada, esperar comando externo
+            break;
     }
-
-    connected = true;
-    connectionAttempts = 0;
-    return true;
 }
 
 void WiFiService::disconnect() {
     WiFi.disconnect();
-    connected = false;
+    changeState(WiFiConnectionState::DISCONNECTED);
+    if (onDisconnectedCallback) onDisconnectedCallback();
 }
 
 void WiFiService::setCallbacks(void (*onConnect)(), void (*onDisconnect)()) {
@@ -68,4 +87,28 @@ void WiFiService::setCallbacks(void (*onConnect)(), void (*onDisconnect)()) {
 }
 
 void WiFiService::printStatus() {
+    Serial.print("[WiFi] State: ");
+    switch (state) {
+        case WiFiConnectionState::DISCONNECTED:
+            Serial.print("DISCONNECTED");
+            break;
+        case WiFiConnectionState::CONNECTING:
+            Serial.print("CONNECTING");
+            break;
+        case WiFiConnectionState::CONNECTED:
+            Serial.print("CONNECTED");
+            break;
+        case WiFiConnectionState::RECONNECT_DELAY:
+            Serial.print("RECONNECT_DELAY");
+            break;
+    }
+    
+    if (state == WiFiConnectionState::CONNECTED) {
+        Serial.print(" | IP: ");
+        Serial.print(getLocalIP());
+        Serial.print(" | RSSI: ");
+        Serial.print(getRSSI());
+        Serial.print(" dBm");
+    }
+    Serial.println();
 }
