@@ -20,28 +20,6 @@ ClairDevice::ClairDevice(const ClairPins& pins,
       lastDisplayedStatus(OPTIMAL),
       displayInitialized(false) {}
 
-// Constructor with individual parameters
-ClairDevice::ClairDevice(int sda, int scl, int rx, int tx, int set, int reset,
-                         unsigned long scd41Interval,
-                         unsigned long pmsInterval,
-                         unsigned long reportInterval,
-                         int displaySda,
-                         int displayScl,
-                         int rgbRedPin,
-                         int rgbGreenPin,
-                         int rgbBluePin)
-    : scd41Device(sda, scl, scd41Interval),
-      pms5003Device(rx, tx, set, reset, pmsInterval),
-      display(128, 64, displaySda, displayScl, 0x3C, this),
-      warningLed(rgbRedPin, rgbGreenPin, rgbBluePin, false, false, false, this, true),
-      lastReportTime(0),
-      reportInterval(reportInterval),
-      allSensorsReady(false),
-      simulationEnabled(false),
-      simulationStartTime(0),
-      lastDisplayedStatus(OPTIMAL),
-      displayInitialized(false) {}
-
 // Inicializar sistema
 bool ClairDevice::begin() {
     // No esperar a que terminen - iniciar en background
