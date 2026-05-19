@@ -165,6 +165,3 @@ bool CloudService::testConnection() {
     Serial.println("[CloudService] Cloud service configured with URL: " + endpointUrl);
     return true;  // Asumir que está bien configurado
 }
-
-void CloudService::printStats() {
-}

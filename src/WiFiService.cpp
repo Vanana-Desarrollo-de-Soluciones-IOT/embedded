@@ -66,6 +66,3 @@ void WiFiService::setCallbacks(void (*onConnect)(), void (*onDisconnect)()) {
     onConnectedCallback = onConnect;
     onDisconnectedCallback = onDisconnect;
 }
-
-void WiFiService::printStatus() {
-}
