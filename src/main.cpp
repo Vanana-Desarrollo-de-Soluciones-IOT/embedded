@@ -8,7 +8,7 @@
 #define WIFI_SSID "Wokwi-GUEST"
 #define WIFI_PASSWORD ""
 
-#define CLOUD_ENDPOINT "https://perraaaaa.free.beeceptor.com/"
+#define CLOUD_ENDPOINT "https://perraaaaa.free.beeceptor.com/api/v1/device/telemetry"
 #define DEVICE_ID "CLAIR001"
 #define DEVICE_SECRET "your-device-secret"
 #define CLOUD_SEND_INTERVAL 30000 // 30 seconds
