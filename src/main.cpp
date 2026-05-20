@@ -8,28 +8,23 @@
 #define WIFI_SSID "Wokwi-GUEST"
 #define WIFI_PASSWORD ""
 
-#define CLOUD_ENDPOINT ""
-#define DEVICE_ID "CLAIR-0001"
-#define DEVICE_SECRET "fOIP-dIzEnXmirN8edZyY91f98wcskUFAAI_6E78uw8"
-#define CLOUD_SEND_INTERVAL 10000 // 30 seconds
+// Simplificado - una sola URL 
+#define EDGE_BASE_URL ""
+#define HARDWARE_ID "CLAIR-0001"
+#define DEVICE_SECRET "H7HRqysSxsaKdkRYJoB46goGucCAlahPF09XEO4QNDM"
+
+#define CLOUD_SEND_INTERVAL 10000      // 10 segundos - telemetría al Cloud
+#define REMOTE_POLL_INTERVAL 10000     // 10 segundos - comandos desde Edge
 
 #define CLAIR_SIMULATION_MODE false
 
 ClairDevice clair;
 
 void printBanner() {
-    Serial.println("\n");
-    Serial.println("   ██████╗██╗      █████╗ ██╗██████╗ ");
-    Serial.println("  ██╔════╝██║     ██╔══██╗██║██╔══██╗");
-    Serial.println("  ██║     ██║     ███████║██║██████╔╝");
-    Serial.println("  ██║     ██║     ██╔══██║██║██╔══██╗");
-    Serial.println("  ╚██████╗███████╗██║  ██║██║██║  ██║");
-    Serial.println("   ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝");
-    Serial.println("                                         ");
-    Serial.println("   Environmental Monitoring System v1.2");
-    Serial.println("   =====================================\n");
+    Serial.println("\n==================================================");
+    Serial.println("     Environmental Monitoring System v1.4");
+    Serial.println("==================================================\n");
 }
-
 
 void setup() {
     Serial.begin(115200);
@@ -38,23 +33,33 @@ void setup() {
     printBanner();
     
     clair.begin();
-    clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
-    clair.beginNTP("pool.ntp.org", -18000);  // -18000 = UTC-5
     
-    clair.setupCloud(CLOUD_ENDPOINT, DEVICE_ID, DEVICE_SECRET, CLOUD_SEND_INTERVAL);
+    // PRIMERO: Conectar WiFi (rápido)
+    clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
+    
+    // SEGUNDO: Iniciar NTP (rápido, no bloqueante)
+    clair.beginNTP("pool.ntp.org", -18000);
+    
+    // TERCERO: Configurar Edge Service
+    clair.setupEdge(EDGE_BASE_URL, HARDWARE_ID, DEVICE_SECRET, 
+                    CLOUD_SEND_INTERVAL, REMOTE_POLL_INTERVAL);
+    
+    // CUARTO: Los sensores se inicializan en background
     clair.setSimulationEnabled(CLAIR_SIMULATION_MODE);
+    
+    // El sistema ya está respondiendo aunque los sensores no estén listos
+    Serial.println("[Main] Setup complete - system running with partial data if needed");
 }
 
 void loop() {
-    clair.update();  // Aquí se completa la inicialización gradualmente
+    clair.update();
     delay(50);
     
-    // Opcional: monitorear estado de inicialización
-    static unsigned long lastStatusPrint = 0;
-    if (millis() - lastStatusPrint > 5000 && !clair.isInitializationComplete()) {
-        Serial.print("Initialization state: ");
-        Serial.println(clair.getInitStateString());
-        lastStatusPrint = millis();
+    // Mostrar estado del modo standby si cambió
+    static bool lastStandbyState = false;
+    if (clair.isStandbyMode() != lastStandbyState) {
+        lastStandbyState = clair.isStandbyMode();
+        Serial.print("Standby mode: ");
+        Serial.println(lastStandbyState ? "ACTIVE" : "INACTIVE");
     }
 }
-

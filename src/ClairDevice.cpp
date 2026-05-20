@@ -9,6 +9,7 @@ static const unsigned long SIM_PHASE_CRITICAL_DURATION = 3000UL;
 static const unsigned long SIM_CYCLE_DURATION = SIM_PHASE_OPTIMAL_DURATION + 
                                                   SIM_PHASE_MODERATE_DURATION + 
                                                   SIM_PHASE_CRITICAL_DURATION;
+static const unsigned long STANDBY_POLL_INTERVAL = 60000;  // En standby, consultar cada 60 segundos
 
 // Constructor con struct
 ClairDevice::ClairDevice(const ClairPins& pins, 
@@ -34,7 +35,8 @@ ClairDevice::ClairDevice(const ClairPins& pins,
       timeSynchronized(false),
       lastNTPSync(0),
       ntpSyncInterval(3600000),  // 1 hora
-      timezoneOffset(-18000) {}  // UTC-5 por defecto
+      timezoneOffset(-18000), // UTC-5 por defecto
+      standbyMode(false) {}  
 
 // Inicializar sistema
 bool ClairDevice::begin() {
@@ -58,6 +60,43 @@ bool ClairDevice::begin() {
     return true;  // Siempre retorna true, la inicialización continúa en background
 }
 
+// Callback estático para procesar comandos
+// Callback estático para procesar comandos remotos (SOLO PRINT POR AHORA)
+bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
+    Serial.printf("[ClairDevice] Command received: ID=%s, TYPE=%s\n", 
+                  cmd.commandId.c_str(), cmd.type.c_str());
+    
+    // Solo reconocer e imprimir el tipo de comando
+    if (cmd.type == "STANDBY") {
+        Serial.println("[ClairDevice] → Recognized: STANDBY command");
+        // TODO: Implementar lógica de standby más adelante
+    }
+    else if (cmd.type == "WAKE") {
+        Serial.println("[ClairDevice] → Recognized: WAKE command");
+        // TODO: Implementar lógica de wake más adelante
+    }
+    else if (cmd.type == "RESTART") {
+        Serial.println("[ClairDevice] → Recognized: RESTART command");
+        // TODO: Implementar lógica de restart más adelante
+    }
+    else if (cmd.type == "REPORT") {
+        Serial.println("[ClairDevice] → Recognized: REPORT command");
+        // TODO: Implementar lógica de report más adelante
+    }
+    else if (cmd.type == "CALIBRATE") {
+        Serial.println("[ClairDevice] → Recognized: CALIBRATE command");
+        // TODO: Implementar lógica de calibrate más adelante
+    }
+    else {
+        Serial.printf("[ClairDevice] → Unknown command type: %s\n", cmd.type.c_str());
+        return false;
+    }
+    
+    // Siempre retornar true por ahora para que se envíe ACK
+    return true;
+}
+
+
 void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
     this->timezoneOffset = timezoneOffset;
     
@@ -65,7 +104,7 @@ void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
     
     Serial.print("[NTP] Synchronizing time with ");
     Serial.print(ntpServer);
-    Serial.println("...");
+    Serial.println();
     
     // Esperar hasta 10 segundos para sincronizar
     unsigned long start = millis();
@@ -80,8 +119,8 @@ void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
         
         struct tm timeinfo;
         getLocalTime(&timeinfo);
-        Serial.printf("[NTP] Current time: %02d:%02d:%02d\n", 
-                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+        Serial.printf("[NTP] Current time: %02d:%02d:%02d\r\n", 
+                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);        
     } else {
         Serial.println("[NTP] Time synchronization failed - will retry later");
         timeSynchronized = false;
@@ -188,7 +227,7 @@ const char* ClairDevice::getInitStateString() const {
 }
 
 // Actualizar todos los sensores
-void ClairDevice::update() {
+void ClairDevice::update() {    
     // NUEVO: Gestionar inicialización no bloqueante
     updateInitialization();
     
@@ -203,9 +242,7 @@ void ClairDevice::update() {
             updateParticulateMatterData();
         }
         
-        updateWarningLed();
-        
-        // Resto del código igual...
+        updateWarningLed();              
         if (!displayInitialized || currentData.status != lastDisplayedStatus) {
             refreshDisplay();
             lastDisplayedStatus = currentData.status;
@@ -216,8 +253,10 @@ void ClairDevice::update() {
         wifi.update();
         updateNTP();
         
-        if (wifi.isConnected() && cloud.isEnabled()) {
-            cloud.sendDataThrottled(currentData);
+        if (wifi.isConnected()) {
+            edge.sendTelemetry(currentData);
+            edge.pollCommands();        // Llena la cola con nuevos comandos
+            edge.processCommandQueue(); // Procesa comandos de la cola uno por uno
         }
         
         unsigned long now = millis();
@@ -227,6 +266,46 @@ void ClairDevice::update() {
         }
     }
 }
+
+void ClairDevice::printEdgeStats() {
+    edge.printStats();
+}
+
+// Implementar setStandbyMode
+void ClairDevice::setStandbyMode(bool standby) {
+    if (standbyMode == standby) return;
+    
+    standbyMode = standby;
+    
+    if (standbyMode) {
+        Serial.println("[ClairDevice] Entering STANDBY mode");
+        
+        // Apagar display
+        display.off();
+        
+        // Apagar LED de advertencia
+        warningLed.off();
+        
+        // Poner sensores en sleep (si soportan)
+        // scd41 no tiene sleep fácil, pero podemos leer menos frecuente
+        // pms5003Device.getSensor().sleep();
+        
+        // Cambiar intervalo de polling remoto
+        // Se maneja en update()
+    } else {
+        Serial.println("[ClairDevice] Exiting STANDBY mode");
+        
+        // Encender display
+        display.on();
+        
+        // Reanudar sensores
+        // pms5003Device.getSensor().wake();
+        
+        // Forzar lectura inmediata
+        forceReport();
+    }
+}
+
 
 void ClairDevice::updateAirQualityData() {
     if (scd41Device.getSensor().isInitialized()) {
@@ -412,10 +491,6 @@ String ClairDevice::getAirQualityLabel(int co2) {
 
 void ClairDevice::setupWiFi(const String& ssid, const String& password) {
     wifi.begin(ssid, password);
-}
-
-void ClairDevice::setupCloud(const String& endpoint, const String& hardwareId, const String& deviceSecret, unsigned long interval) {
-    cloud.begin(endpoint, hardwareId, deviceSecret, interval);
 }
 
 void ClairDevice::setSimulationEnabled(bool enabled) {

@@ -42,6 +42,9 @@ struct ClairData {
     String timeFormatted;    // "HH:MM:SS" para la medición
     String uptimeFormatted;   // "HH:MM:SS" para el uptime
     
+    String country;  // País desde donde se envía
+    
+    
     // Constructor
     ClairData() {
         timestamp = 0;
@@ -64,6 +67,7 @@ struct ClairData {
 
         timeFormatted = "";
         uptimeFormatted = "";
+        country = "PERU";
     }
     
     // Calculate AQI based on PM2.5
