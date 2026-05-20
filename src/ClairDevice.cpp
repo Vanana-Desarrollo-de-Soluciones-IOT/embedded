@@ -60,39 +60,51 @@ bool ClairDevice::begin() {
     return true;  // Siempre retorna true, la inicialización continúa en background
 }
 
-// Callback estático para procesar comandos
-// Callback estático para procesar comandos remotos (SOLO PRINT POR AHORA)
+// Callback estático para procesar comandos remotos
 bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
     Serial.printf("[ClairDevice] Command received: ID=%s, TYPE=%s\n", 
                   cmd.commandId.c_str(), cmd.type.c_str());
     
-    // Solo reconocer e imprimir el tipo de comando
+    // Obtener referencia al dispositivo (necesitamos una instancia global)
+    // Para esto, necesitamos una variable global o un singleton
+    extern ClairDevice* g_clairDevice;  // Declarar en main.cpp
+    
     if (cmd.type == "STANDBY") {
-        Serial.println("[ClairDevice] → Recognized: STANDBY command");
-        // TODO: Implementar lógica de standby más adelante
+        Serial.println("[ClairDevice] → Executing STANDBY command");
+        if (g_clairDevice) {
+            g_clairDevice->setStandbyMode(true);
+        }
+        return true;
     }
     else if (cmd.type == "WAKE") {
-        Serial.println("[ClairDevice] → Recognized: WAKE command");
-        // TODO: Implementar lógica de wake más adelante
+        Serial.println("[ClairDevice] → Executing WAKE command");
+        if (g_clairDevice) {
+            g_clairDevice->setStandbyMode(false);
+        }
+        return true;
     }
     else if (cmd.type == "RESTART") {
-        Serial.println("[ClairDevice] → Recognized: RESTART command");
-        // TODO: Implementar lógica de restart más adelante
+        Serial.println("[ClairDevice] → Executing RESTART command");
+        // TODO: Implementar restart lógica
+        return true;
     }
     else if (cmd.type == "REPORT") {
-        Serial.println("[ClairDevice] → Recognized: REPORT command");
-        // TODO: Implementar lógica de report más adelante
+        Serial.println("[ClairDevice] → Executing REPORT command");
+        if (g_clairDevice) {
+            g_clairDevice->forceReport();
+        }
+        return true;
     }
     else if (cmd.type == "CALIBRATE") {
-        Serial.println("[ClairDevice] → Recognized: CALIBRATE command");
-        // TODO: Implementar lógica de calibrate más adelante
+        Serial.println("[ClairDevice] → Executing CALIBRATE command");
+        // TODO: Implementar calibrate lógica
+        return true;
     }
     else {
         Serial.printf("[ClairDevice] → Unknown command type: %s\n", cmd.type.c_str());
         return false;
     }
     
-    // Siempre retornar true por ahora para que se envíe ACK
     return true;
 }
 
@@ -233,6 +245,27 @@ void ClairDevice::update() {
     
     // Solo procesar sensores si la inicialización avanzó lo suficiente
     if (initState == INIT_COMPLETE || initState == INIT_PARTIAL) {
+        
+        // En modo standby, reducir frecuencia de operaciones
+        static unsigned long lastStandbyUpdate = 0;
+        unsigned long now = millis();
+        
+        if (standbyMode) {
+            // En standby, actualizar solo cada 5 segundos
+            if (now - lastStandbyUpdate < 5000) {
+                // Aún no es tiempo de actualizar en standby
+                // Pero seguimos procesando comandos (importante)
+                wifi.update();
+                if (wifi.isConnected()) {
+                    edge.pollCommands();        // Llena la cola con nuevos comandos
+                    edge.processCommandQueue(); // Procesa comandos de la cola
+                }
+                return;
+            }
+            lastStandbyUpdate = now;
+        }
+        
+        // Procesamiento normal o actualización periódica en standby
         if (simulationEnabled) {
             updateSimulationData();
         } else {
@@ -242,13 +275,16 @@ void ClairDevice::update() {
             updateParticulateMatterData();
         }
         
-        updateWarningLed();              
-        if (!displayInitialized || currentData.status != lastDisplayedStatus) {
-            refreshDisplay();
-            lastDisplayedStatus = currentData.status;
-            displayInitialized = true;
+        // En standby, no actualizar LED ni display frecuentemente
+        if (!standbyMode) {
+            updateWarningLed();              
+            if (!displayInitialized || currentData.status != lastDisplayedStatus) {
+                refreshDisplay();
+                lastDisplayedStatus = currentData.status;
+                displayInitialized = true;
+            }
+            display.autoPowerManagement();
         }
-        display.autoPowerManagement();
         
         wifi.update();
         updateNTP();
@@ -259,10 +295,10 @@ void ClairDevice::update() {
             edge.processCommandQueue(); // Procesa comandos de la cola uno por uno
         }
         
-        unsigned long now = millis();
-        if (now - lastReportTime >= reportInterval) {
+        unsigned long nowReport = millis();
+        if (nowReport - lastReportTime >= reportInterval) {
             generateUnifiedReport();
-            lastReportTime = now;
+            lastReportTime = nowReport;
         }
     }
 }
@@ -270,42 +306,6 @@ void ClairDevice::update() {
 void ClairDevice::printEdgeStats() {
     edge.printStats();
 }
-
-// Implementar setStandbyMode
-void ClairDevice::setStandbyMode(bool standby) {
-    if (standbyMode == standby) return;
-    
-    standbyMode = standby;
-    
-    if (standbyMode) {
-        Serial.println("[ClairDevice] Entering STANDBY mode");
-        
-        // Apagar display
-        display.off();
-        
-        // Apagar LED de advertencia
-        warningLed.off();
-        
-        // Poner sensores en sleep (si soportan)
-        // scd41 no tiene sleep fácil, pero podemos leer menos frecuente
-        // pms5003Device.getSensor().sleep();
-        
-        // Cambiar intervalo de polling remoto
-        // Se maneja en update()
-    } else {
-        Serial.println("[ClairDevice] Exiting STANDBY mode");
-        
-        // Encender display
-        display.on();
-        
-        // Reanudar sensores
-        // pms5003Device.getSensor().wake();
-        
-        // Forzar lectura inmediata
-        forceReport();
-    }
-}
-
 
 void ClairDevice::updateAirQualityData() {
     if (scd41Device.getSensor().isInitialized()) {
@@ -497,4 +497,50 @@ void ClairDevice::setSimulationEnabled(bool enabled) {
     simulationEnabled = enabled;
     simulationStartTime = millis();
     displayInitialized = false;
+}
+
+void ClairDevice::setStandbyMode(bool standby) {
+    if (standbyMode == standby) return;
+    
+    standbyMode = standby;
+    
+    if (standbyMode) {
+        Serial.println("[ClairDevice] Entering STANDBY mode");
+        
+        // Apagar display
+        display.off();
+        
+        // Apagar LED de advertencia
+        warningLed.off();
+        
+        // Reducir frecuencia de lectura de sensores (opcional)
+        // scd41Device.getSensor().setReadInterval(30000); // Si tienes este método
+        // pms5003Device.getSensor().setReadInterval(30000);
+        
+        // Reducir frecuencia de reportes
+        // reportInterval = 60000; // Opcional: reportar cada minuto
+        
+        // Opcional: Deshabilitar telemetría para ahorrar batería
+        // edge.setTelemetryEnabled(false);
+        
+        // Mantener polling de comandos para poder recibir WAKE
+        // (el polling ya está configurado en edge.pollCommands())
+        
+    } else {
+        Serial.println("[ClairDevice] Exiting STANDBY mode");
+        
+        // Encender display
+        display.on();
+        
+        // Restaurar frecuencias normales
+        // scd41Device.getSensor().setReadInterval(2000);
+        // pms5003Device.getSensor().setReadInterval(2000);
+        // reportInterval = 10000;
+        
+        // Reactivar telemetría si fue deshabilitada
+        // edge.setTelemetryEnabled(true);
+        
+        // Forzar una lectura inmediata para actualizar estado
+        forceReport();
+    }
 }

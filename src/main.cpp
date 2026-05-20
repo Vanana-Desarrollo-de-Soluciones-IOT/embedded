@@ -9,7 +9,7 @@
 #define WIFI_PASSWORD ""
 
 // Simplificado - una sola URL 
-#define EDGE_BASE_URL ""
+#define EDGE_BASE_URL "https://tu-edge-server.com"  // Cambiar por tu URL real
 #define HARDWARE_ID "CLAIR-0001"
 #define DEVICE_SECRET "H7HRqysSxsaKdkRYJoB46goGucCAlahPF09XEO4QNDM"
 
@@ -19,6 +19,7 @@
 #define CLAIR_SIMULATION_MODE false
 
 ClairDevice clair;
+ClairDevice* g_clairDevice = &clair;  // Instancia global para callbacks estáticos
 
 void printBanner() {
     Serial.println("\n==================================================");
@@ -59,7 +60,7 @@ void loop() {
     static bool lastStandbyState = false;
     if (clair.isStandbyMode() != lastStandbyState) {
         lastStandbyState = clair.isStandbyMode();
-        Serial.print("Standby mode: ");
+        Serial.print("[Main] Standby mode: ");
         Serial.println(lastStandbyState ? "ACTIVE" : "INACTIVE");
     }
 }
