@@ -23,7 +23,7 @@ bool SCD41Sensor::begin() {
     scd41.enablePeriodMeasure(SCD4X_START_PERIODIC_MEASURE);
     
     // Eliminar el bucle de delay de 4 segundos!
-    Serial.println("SCD41 initializing... (will take ~5 seconds for first reading)");
+    Serial.println("[SCD41] initializing...");
     
     sensorInitialized = true;
     return true;

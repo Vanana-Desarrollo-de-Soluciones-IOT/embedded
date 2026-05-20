@@ -104,7 +104,7 @@ void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
     
     Serial.print("[NTP] Synchronizing time with ");
     Serial.print(ntpServer);
-    Serial.println("...");
+    Serial.println();
     
     // Esperar hasta 10 segundos para sincronizar
     unsigned long start = millis();
@@ -119,8 +119,8 @@ void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
         
         struct tm timeinfo;
         getLocalTime(&timeinfo);
-        Serial.printf("[NTP] Current time: %02d:%02d:%02d\n", 
-                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+        Serial.printf("[NTP] Current time: %02d:%02d:%02d\r\n", 
+                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);        
     } else {
         Serial.println("[NTP] Time synchronization failed - will retry later");
         timeSynchronized = false;
@@ -242,9 +242,7 @@ void ClairDevice::update() {
             updateParticulateMatterData();
         }
         
-        updateWarningLed();
-        
-        // Resto del código igual...
+        updateWarningLed();              
         if (!displayInitialized || currentData.status != lastDisplayedStatus) {
             refreshDisplay();
             lastDisplayedStatus = currentData.status;
@@ -257,7 +255,8 @@ void ClairDevice::update() {
         
         if (wifi.isConnected()) {
             edge.sendTelemetry(currentData);
-            edge.pollCommands();
+            edge.pollCommands();        // Llena la cola con nuevos comandos
+            edge.processCommandQueue(); // Procesa comandos de la cola uno por uno
         }
         
         unsigned long now = millis();
@@ -266,6 +265,10 @@ void ClairDevice::update() {
             lastReportTime = now;
         }
     }
+}
+
+void ClairDevice::printEdgeStats() {
+    edge.printStats();
 }
 
 // Implementar setStandbyMode

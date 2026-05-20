@@ -8,12 +8,12 @@
 #define WIFI_SSID "Wokwi-GUEST"
 #define WIFI_PASSWORD ""
 
-// Simplificado - una sola URL
+// Simplificado - una sola URL 
 #define EDGE_BASE_URL ""
 #define HARDWARE_ID "CLAIR-0001"
-#define DEVICE_SECRET ""
+#define DEVICE_SECRET "H7HRqysSxsaKdkRYJoB46goGucCAlahPF09XEO4QNDM"
 
-#define CLOUD_SEND_INTERVAL 10000      // 15 segundos - telemetría al Cloud
+#define CLOUD_SEND_INTERVAL 10000      // 10 segundos - telemetría al Cloud
 #define REMOTE_POLL_INTERVAL 10000     // 10 segundos - comandos desde Edge
 
 #define CLAIR_SIMULATION_MODE false
@@ -22,7 +22,7 @@ ClairDevice clair;
 
 void printBanner() {
     Serial.println("\n==================================================");
-    Serial.println("     Environmental Monitoring System v1.3");
+    Serial.println("     Environmental Monitoring System v1.4");
     Serial.println("==================================================\n");
 }
 
@@ -33,13 +33,22 @@ void setup() {
     printBanner();
     
     clair.begin();
+    
+    // PRIMERO: Conectar WiFi (rápido)
     clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
-    clair.beginNTP("pool.ntp.org", -18000);  // -18000 = UTC-5
     
-    // IMPORTANTE: Edge para enviar TELEMETRÍA y recibir COMANDOS
-    clair.setupEdge(EDGE_BASE_URL, HARDWARE_ID, DEVICE_SECRET, CLOUD_SEND_INTERVAL, REMOTE_POLL_INTERVAL);
+    // SEGUNDO: Iniciar NTP (rápido, no bloqueante)
+    clair.beginNTP("pool.ntp.org", -18000);
     
+    // TERCERO: Configurar Edge Service
+    clair.setupEdge(EDGE_BASE_URL, HARDWARE_ID, DEVICE_SECRET, 
+                    CLOUD_SEND_INTERVAL, REMOTE_POLL_INTERVAL);
+    
+    // CUARTO: Los sensores se inicializan en background
     clair.setSimulationEnabled(CLAIR_SIMULATION_MODE);
+    
+    // El sistema ya está respondiendo aunque los sensores no estén listos
+    Serial.println("[Main] Setup complete - system running with partial data if needed");
 }
 
 void loop() {

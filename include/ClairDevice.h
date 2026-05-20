@@ -156,7 +156,7 @@ public:
     String getCurrentStatusLabel() const {
         return currentData.statusLabel;
     }
-
+    
     void setupEdge(const String& baseUrl, const String& hardwareId, const String& deviceSecret,
                unsigned long telemetryInterval = 15000,
                unsigned long commandPollInterval = 10000) {
@@ -167,6 +167,7 @@ public:
     // Agrega estos métodos    
     bool isStandbyMode() const { return standbyMode; }
     void setStandbyMode(bool standby);
+    void printEdgeStats();  // Imprime estadísticas del Edge Service en Serial   
 
     // Cloud services
     void setupWiFi(const String& ssid, const String& password);
@@ -192,7 +193,8 @@ public:
     void updateNTP();
     bool isTimeSynchronized() const { return timeSynchronized; }
     String getFormattedTime();  // Retorna "HH:MM:SS"
-    unsigned long getCurrentEpoch();  // Retorna segundos desde 1970
+    unsigned long getCurrentEpoch();  // Retorna segundos desde 1970     
+    
 };
 
 #endif // CLAIR_DEVICE_H
