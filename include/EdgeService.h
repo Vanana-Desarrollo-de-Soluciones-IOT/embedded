@@ -248,52 +248,58 @@ public:
      * @return true si se procesó un comando
      */
     bool pollCommands() {
-        if (!commandsEnabled) return false;
-        if (commandCallback == nullptr) return false;
-        if (WiFi.status() != WL_CONNECTED) return false;
+    if (!commandsEnabled) return false;
+    if (commandCallback == nullptr) return false;
+    if (WiFi.status() != WL_CONNECTED) return false;
+    
+    unsigned long now = millis();
+    if (now - lastCommandPollTime < commandPollInterval) {
+        return false;
+    }
+    lastCommandPollTime = now;
+    
+    String url = baseUrl + "/api/v1/device/commands/pending";
+    
+    httpClient.begin(url);
+    addAuthHeaders();
+    httpClient.setTimeout(5000);
+    
+    int httpCode = httpClient.GET();
+    
+    if (httpCode == 200) {
+        String payload = httpClient.getString();
+        httpClient.end();
         
-        unsigned long now = millis();
-        if (now - lastCommandPollTime < commandPollInterval) {
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, payload);
+        
+        if (error) {
+            Serial.printf("[Edge] Failed to parse command response: %s\n", error.c_str());
             return false;
         }
-        lastCommandPollTime = now;
         
-        String url = baseUrl + "/api/v1/device/commands/pending";
+        // Verificar la nueva estructura: { "count": X, "commands": [...] }
+        int count = doc["count"] | 0;
         
-        httpClient.begin(url);
-        addAuthHeaders();
-        httpClient.setTimeout(5000);
-        
-        int httpCode = httpClient.GET();
-        
-        if (httpCode == 200) {
-            String payload = httpClient.getString();
-            httpClient.end();
+        if (count > 0 && doc["commands"].is<JsonArray>()) {
+            JsonArray commands = doc["commands"].as<JsonArray>();
             
-            JsonDocument doc;
-            DeserializationError error = deserializeJson(doc, payload);
-            
-            if (error) {
-                Serial.println("[Edge] Failed to parse command response");
-                return false;
-            }
-            
-            if (doc.containsKey("command")) {
-                JsonObject cmd = doc["command"];
-                
+            for (JsonObject cmd : commands) {
                 RemoteCommand remoteCmd;
                 remoteCmd.valid = true;
-                remoteCmd.commandId = cmd["id"].as<String>();
+                remoteCmd.commandId = cmd["commandId"].as<String>();  // Nota: es "commandId", no "id"
                 remoteCmd.type = cmd["type"].as<String>();
                 
-                if (cmd.containsKey("parameters")) {
-                    serializeJson(cmd["parameters"], remoteCmd.parameters);
+                // El payload puede estar en "payload"
+                if (cmd.containsKey("payload") && !cmd["payload"].isNull()) {
+                    serializeJson(cmd["payload"], remoteCmd.parameters);
                 }
                 
                 commandsReceived++;
                 Serial.printf("[Edge] Received command: %s (type: %s)\n", 
                               remoteCmd.commandId.c_str(), remoteCmd.type.c_str());
                 
+                // Ejecutar comando a través del callback
                 bool success = commandCallback(remoteCmd);
                 
                 if (success) {
@@ -304,23 +310,26 @@ public:
                     sendAck(remoteCmd.commandId, "FAILED", "Execution error");
                 }
                 
-                return true;
+                return true;  // Procesar un comando por ciclo
             }
-        } 
-        else if (httpCode == 204 || httpCode == 404) {
-            // No hay comandos - respuesta normal
-            httpClient.end();
-            return false;
+        } else {
+            Serial.println("[Edge] No pending commands");
         }
-        else {
-            httpClient.end();
-            if (httpCode > 0) {
-                Serial.printf("[Edge] Command poll HTTP error: %d\n", httpCode);
-            }
-        }
-        
+    } 
+    else if (httpCode == 204 || httpCode == 404) {
+        // No hay comandos - respuesta normal
+        httpClient.end();
         return false;
     }
+    else {
+        httpClient.end();
+        if (httpCode > 0) {
+            Serial.printf("[Edge] Command poll HTTP error: %d\n", httpCode);
+        }
+    }
+    
+    return false;
+}
     
     /**
      * @brief Establece el callback para comandos remotos

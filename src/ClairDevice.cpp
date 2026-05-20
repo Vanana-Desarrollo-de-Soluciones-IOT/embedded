@@ -61,37 +61,39 @@ bool ClairDevice::begin() {
 }
 
 // Callback estático para procesar comandos
+// Callback estático para procesar comandos remotos (SOLO PRINT POR AHORA)
 bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
-    Serial.printf("[ClairDevice] Executing remote command: %s\n", cmd.type.c_str());
+    Serial.printf("[ClairDevice] Command received: ID=%s, TYPE=%s\n", 
+                  cmd.commandId.c_str(), cmd.type.c_str());
     
+    // Solo reconocer e imprimir el tipo de comando
     if (cmd.type == "STANDBY") {
-        // Entrar en modo standby
-        // Guardar estado actual y apagar periféricos no esenciales
-        return true;
+        Serial.println("[ClairDevice] → Recognized: STANDBY command");
+        // TODO: Implementar lógica de standby más adelante
     }
     else if (cmd.type == "WAKE") {
-        // Salir del modo standby
-        return true;
+        Serial.println("[ClairDevice] → Recognized: WAKE command");
+        // TODO: Implementar lógica de wake más adelante
     }
     else if (cmd.type == "RESTART") {
-        // Reiniciar el dispositivo
-        Serial.println("[ClairDevice] Restarting...");
-        delay(100);
-        ESP.restart();
-        return true;
+        Serial.println("[ClairDevice] → Recognized: RESTART command");
+        // TODO: Implementar lógica de restart más adelante
     }
     else if (cmd.type == "REPORT") {
-        // Forzar reporte
-        // Usar el comando existente
-        return true;
+        Serial.println("[ClairDevice] → Recognized: REPORT command");
+        // TODO: Implementar lógica de report más adelante
     }
     else if (cmd.type == "CALIBRATE") {
-        // Calibrar sensor
-        return true;
+        Serial.println("[ClairDevice] → Recognized: CALIBRATE command");
+        // TODO: Implementar lógica de calibrate más adelante
+    }
+    else {
+        Serial.printf("[ClairDevice] → Unknown command type: %s\n", cmd.type.c_str());
+        return false;
     }
     
-    Serial.printf("[ClairDevice] Unknown command type: %s\n", cmd.type.c_str());
-    return false;
+    // Siempre retornar true por ahora para que se envíe ACK
+    return true;
 }
 
 
