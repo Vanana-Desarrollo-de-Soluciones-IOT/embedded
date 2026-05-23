@@ -39,7 +39,7 @@ class EdgeService {
 private:
     String baseUrl;
     String hardwareId;
-    String deviceSecret;
+    String apiKey;
     
     // Telemetría
     unsigned long lastTelemetryTime;
@@ -73,7 +73,7 @@ private:
      */
     void addAuthHeaders() {
         httpClient.addHeader("X-Hardware-Id", hardwareId);
-        httpClient.addHeader("X-Device-Secret", deviceSecret);
+        httpClient.addHeader("X-API-Key", apiKey);
         httpClient.addHeader("Content-Type", "application/json");
     }
     
@@ -194,7 +194,7 @@ public:
      * @brief Inicializa el servicio Edge
      * @param url Base URL del Edge (ej: "https://edge.example.com")
      * @param id Hardware ID del dispositivo
-     * @param secret Device Secret
+     * @param secret API Key
      * @param telemetryIntervalMs Intervalo de envío de telemetría (ms)
      * @param commandPollIntervalMs Intervalo de consulta de comandos (ms)
      */
@@ -207,7 +207,7 @@ public:
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
         hardwareId = id;
-        deviceSecret = secret;
+        apiKey = secret;
         telemetryInterval = telemetryIntervalMs;
         commandPollInterval = commandPollIntervalMs;
         
@@ -254,7 +254,7 @@ public:
         }
         
         telemetryFailed++;
-        Serial.printf("[Edge] Telemetry failed: HTTP %d\n", httpCode);
+        Serial.printf("[Edge] Telemetry failed: HTTP %d\r\n", httpCode);
         return false;
     }
     
@@ -298,7 +298,7 @@ public:
             if (count > 0 && doc["commands"].is<JsonArray>()) {
                 JsonArray commands = doc["commands"].as<JsonArray>();
                 
-                Serial.printf("[Edge] Found %d command(s) in response\n", commands.size());
+                Serial.printf("[Edge] Found %d command(s) in response\r\n", commands.size());
                 
                 // Agregar TODOS los comandos a la cola
                 for (JsonObject cmd : commands) {
@@ -316,13 +316,13 @@ public:
                     newCommands++;
                     commandsReceived++;
                     
-                    Serial.printf("[Edge] Queued command: %s (type: %s) - Queue size: %d\n", 
+                    Serial.printf("[Edge] Queued command: %s (type: %s) - Queue size: %d\r\n", 
                                   remoteCmd.commandId.c_str(), 
                                   remoteCmd.type.c_str(),
                                   commandQueue.size());
                 }
                 
-                Serial.printf("[Edge] Added %d commands to queue\n", newCommands);
+                Serial.printf("[Edge] Added %d commands to queue\r\n", newCommands);
                 return newCommands > 0;
             } else {
                 Serial.println("[Edge] No pending commands");
@@ -336,7 +336,7 @@ public:
         else {
             httpClient.end();
             if (httpCode > 0) {
-                Serial.printf("[Edge] Command poll HTTP error: %d\n", httpCode);
+                Serial.printf("[Edge] Command poll HTTP error: %d\r\n", httpCode);
             }
         }
         
@@ -363,7 +363,7 @@ public:
         RemoteCommand cmd = commandQueue.front();
         commandQueue.pop();
         
-        Serial.printf("[Edge] Processing queued command: %s (type: %s) - %d remaining\n", 
+        Serial.printf("[Edge] Processing queued command: %s (type: %s) - %d remaining\r\n", 
                       cmd.commandId.c_str(), cmd.type.c_str(), commandQueue.size());
         
         bool success = commandCallback(cmd);
@@ -432,13 +432,13 @@ public:
      */
     void printStats() {
         Serial.println("\n[Edge] Statistics:");
-        Serial.printf("  Telemetry sent:     %lu\n", telemetrySent);
-        Serial.printf("  Telemetry failed:   %lu\n", telemetryFailed);
-        Serial.printf("  Commands received:  %lu\n", commandsReceived);
-        Serial.printf("  Commands queued:    %lu\n", commandsQueued);
-        Serial.printf("  Commands executed:  %lu\n", commandsExecuted);
-        Serial.printf("  Commands failed:    %lu\n", commandsFailed);
-        Serial.printf("  Queue size:         %d\n", commandQueue.size());
+        Serial.printf("  Telemetry sent:     %lu\r\n", telemetrySent);
+        Serial.printf("  Telemetry failed:   %lu\r\n", telemetryFailed);
+        Serial.printf("  Commands received:  %lu\r\n", commandsReceived);
+        Serial.printf("  Commands queued:    %lu\r\n", commandsQueued);
+        Serial.printf("  Commands executed:  %lu\r\n", commandsExecuted);
+        Serial.printf("  Commands failed:    %lu\r\n", commandsFailed);
+        Serial.printf("  Queue size:         %d\r\n", commandQueue.size());
     }
 };
 
