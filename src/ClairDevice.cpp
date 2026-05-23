@@ -240,32 +240,38 @@ const char* ClairDevice::getInitStateString() const {
 
 // Actualizar todos los sensores
 void ClairDevice::update() {    
-    // NUEVO: Gestionar inicialización no bloqueante
+    // Gestionar inicialización no bloqueante
     updateInitialization();
     
-    // Solo procesar sensores si la inicialización avanzó lo suficiente
+    // Solo procesar si la inicialización avanzó lo suficiente
     if (initState == INIT_COMPLETE || initState == INIT_PARTIAL) {
         
-        // En modo standby, reducir frecuencia de operaciones
-        static unsigned long lastStandbyUpdate = 0;
         unsigned long now = millis();
         
+        // === MODO STANDBY: SOLO MANTENER WiFi Y COMANDOS ===
         if (standbyMode) {
-            // En standby, actualizar solo cada 5 segundos
-            if (now - lastStandbyUpdate < 5000) {
-                // Aún no es tiempo de actualizar en standby
-                // Pero seguimos procesando comandos (importante)
-                wifi.update();
-                if (wifi.isConnected()) {
-                    edge.pollCommands();        // Llena la cola con nuevos comandos
-                    edge.processCommandQueue(); // Procesa comandos de la cola
-                }
-                return;
+            // NO leer sensores
+            // NO actualizar LED
+            // NO actualizar display
+            // NO enviar telemetría
+            // NO generar reportes
+            
+            // SOLO mantener WiFi y procesar comandos
+            wifi.update();
+            
+            if (wifi.isConnected()) {
+                edge.pollCommands();        // Buscar nuevos comandos
+                edge.processCommandQueue(); // Procesar comandos (incluyendo WAKE)
             }
-            lastStandbyUpdate = now;
+            
+            // Pequeña pausa para no saturar el CPU
+            delay(100);
+            return;  // Salir inmediatamente - nada más en STANDBY
         }
         
-        // Procesamiento normal o actualización periódica en standby
+        // === MODO NORMAL: TODAS LAS OPERACIONES ===
+        
+        // Leer sensores
         if (simulationEnabled) {
             updateSimulationData();
         } else {
@@ -275,30 +281,30 @@ void ClairDevice::update() {
             updateParticulateMatterData();
         }
         
-        // En standby, no actualizar LED ni display frecuentemente
-        if (!standbyMode) {
-            updateWarningLed();              
-            if (!displayInitialized || currentData.status != lastDisplayedStatus) {
-                refreshDisplay();
-                lastDisplayedStatus = currentData.status;
-                displayInitialized = true;
-            }
-            display.autoPowerManagement();
+        // Actualizar LED y Display
+        updateWarningLed();              
+        if (!displayInitialized || currentData.status != lastDisplayedStatus) {
+            refreshDisplay();
+            lastDisplayedStatus = currentData.status;
+            displayInitialized = true;
         }
+        display.autoPowerManagement();
         
+        // Mantener WiFi y NTP
         wifi.update();
         updateNTP();
         
+        // Enviar telemetría al Edge
         if (wifi.isConnected()) {
             edge.sendTelemetry(currentData);
-            edge.pollCommands();        // Llena la cola con nuevos comandos
-            edge.processCommandQueue(); // Procesa comandos de la cola uno por uno
+            edge.pollCommands();        
+            edge.processCommandQueue();
         }
         
-        unsigned long nowReport = millis();
-        if (nowReport - lastReportTime >= reportInterval) {
+        // Reporte periódico por Serial
+        if (now - lastReportTime >= reportInterval) {
             generateUnifiedReport();
-            lastReportTime = nowReport;
+            lastReportTime = now;
         }
     }
 }
@@ -505,7 +511,7 @@ void ClairDevice::setStandbyMode(bool standby) {
     standbyMode = standby;
     
     if (standbyMode) {
-        Serial.println("[ClairDevice] Entering STANDBY mode");
+        Serial.println("[ClairDevice] Entering STANDBY mode - suspending all non-essential operations");
         
         // Apagar display
         display.off();
@@ -513,32 +519,32 @@ void ClairDevice::setStandbyMode(bool standby) {
         // Apagar LED de advertencia
         warningLed.off();
         
-        // Reducir frecuencia de lectura de sensores (opcional)
-        // scd41Device.getSensor().setReadInterval(30000); // Si tienes este método
-        // pms5003Device.getSensor().setReadInterval(30000);
+        // Poner sensores en sleep (si soportan)
+        if (pms5003Device.getSensor().isInitialized()) {
+            pms5003Device.getSensor().sleep();
+        }
         
-        // Reducir frecuencia de reportes
-        // reportInterval = 60000; // Opcional: reportar cada minuto
+        // NOTA: SCD41 no tiene sleep fácil, simplemente dejamos de leerlo
         
-        // Opcional: Deshabilitar telemetría para ahorrar batería
-        // edge.setTelemetryEnabled(false);
+        // Deshabilitar envío de telemetría
+        edge.setTelemetryEnabled(false);
         
-        // Mantener polling de comandos para poder recibir WAKE
-        // (el polling ya está configurado en edge.pollCommands())
+        // Guardar intervalo original para restaurar después
+        // (opcional, podrías tener variables miembro para esto)
         
     } else {
-        Serial.println("[ClairDevice] Exiting STANDBY mode");
+        Serial.println("[ClairDevice] Exiting STANDBY mode - resuming normal operation");
         
         // Encender display
         display.on();
         
-        // Restaurar frecuencias normales
-        // scd41Device.getSensor().setReadInterval(2000);
-        // pms5003Device.getSensor().setReadInterval(2000);
-        // reportInterval = 10000;
+        // Reactivar sensores
+        if (pms5003Device.getSensor().isInitialized()) {
+            pms5003Device.getSensor().wake();
+        }
         
-        // Reactivar telemetría si fue deshabilitada
-        // edge.setTelemetryEnabled(true);
+        // Re-habilitar telemetría
+        edge.setTelemetryEnabled(true);
         
         // Forzar una lectura inmediata para actualizar estado
         forceReport();

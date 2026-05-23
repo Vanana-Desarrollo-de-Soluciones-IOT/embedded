@@ -10,8 +10,8 @@
 
 // Simplificado - una sola URL 
 #define EDGE_BASE_URL ""  // Cambiar por tu URL real
-#define HARDWARE_ID "CLAIR-0001"
-#define API_KEY ""
+#define HARDWARE_ID "CLAIR-DMWR"
+#define API_KEY "huCHrR5PWwUE-5nFUJBXyokXJW29vn_yRgOdzlOBkkM"
 
 #define CLOUD_SEND_INTERVAL 10000      // 10 segundos - telemetría al Cloud
 #define REMOTE_POLL_INTERVAL 10000     // 10 segundos - comandos desde Edge
