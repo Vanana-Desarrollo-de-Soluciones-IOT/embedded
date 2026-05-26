@@ -108,6 +108,80 @@ bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
     return true;
 }
 
+void ClairDevice::onIncidentDetected(const Incident& incident) {
+    Serial.println("\n🔴🔴🔴 INCIDENT ACTIVATED 🔴🔴🔴");
+    incident.print();
+    
+    extern ClairDevice* g_clairDevice;
+    if (g_clairDevice) {
+        RgbLed& led = g_clairDevice->getWarningLed();
+        
+        // Determinar color del LED según la métrica
+        if (incident.metric == "CO2") {
+            led.setColor(true, false, false);  // ROJO para CO2
+            Serial.println("[LED] 🔴 RED - CO2 incident ACTIVE");
+        } 
+        else if (incident.metric == "PM25") {
+            led.setColor(true, true, false);   // AMARILLO para PM2.5
+            Serial.println("[LED] 🟡 YELLOW - PM2.5 incident ACTIVE");
+        }
+        else if (incident.metric == "TEMP") {
+            led.setColor(false, false, true);  // AZUL para temperatura
+            Serial.println("[LED] 🔵 BLUE - Temperature incident ACTIVE");
+        }
+        else if (incident.metric == "HUMIDITY") {
+            led.setColor(false, true, true);   // CYAN para humedad
+            Serial.println("[LED] 💠 CYAN - Humidity incident ACTIVE");
+        }
+        else {
+            led.setColor(true, true, true);    // BLANCO para otros
+            Serial.println("[LED] ⚪ WHITE - Other incident ACTIVE");
+        }
+        
+        // Opcional: Enviar ACK automático
+        // g_clairDevice->incidentManager.sendAck(incident);
+    }
+}
+
+void ClairDevice::onIncidentResolved(const Incident& incident) {
+    Serial.println("\n🟢🟢🟢 INCIDENT RESOLVED 🟢🟢🟢");
+    incident.print();
+    
+    extern ClairDevice* g_clairDevice;
+    if (g_clairDevice) {
+        RgbLed& led = g_clairDevice->getWarningLed();
+        
+        // Verificar si hay más incidentes activos
+        if (!g_clairDevice->incidentManager.hasActiveIncidents()) {
+            led.off();
+            Serial.println("[LED] ⚫ OFF - No active incidents");
+        } else {
+            // Si hay otros incidentes, mostrar el más crítico
+            Incident mostCritical = g_clairDevice->incidentManager.getMostCriticalIncident();
+            Serial.printf("[LED] Still %d active incident(s), updating LED for: %s\n", 
+                         g_clairDevice->incidentManager.getActiveCount(), 
+                         mostCritical.metric.c_str());
+            
+            // Actualizar LED con el incidente más crítico
+            if (mostCritical.metric == "CO2") {
+                led.setColor(true, false, false);
+            } else if (mostCritical.metric == "PM25") {
+                led.setColor(true, true, false);
+            } else if (mostCritical.metric == "TEMP") {
+                led.setColor(false, false, true);
+            } else if (mostCritical.metric == "HUMIDITY") {
+                led.setColor(false, true, true);
+            }
+        }
+    }
+}
+
+void ClairDevice::setupIncidentManager(const String& baseUrl, const String& hardwareId, 
+                                        const String& apiKey, unsigned long pollInterval) {
+    incidentManager.begin(baseUrl, hardwareId, apiKey, pollInterval);
+    incidentManager.setCallbacks(onIncidentDetected, onIncidentResolved);
+    Serial.println("[ClairDevice] Incident Manager configured");
+}
 
 void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
     this->timezoneOffset = timezoneOffset;
@@ -261,7 +335,7 @@ void ClairDevice::update() {
             
             if (wifi.isConnected()) {
                 edge.pollCommands();        // Buscar nuevos comandos
-                edge.processCommandQueue(); // Procesar comandos (incluyendo WAKE)
+                edge.processCommandQueue(); // Procesar comandos (incluyendo WAKE)                
             }
             
             // Pequeña pausa para no saturar el CPU
@@ -299,6 +373,8 @@ void ClairDevice::update() {
             edge.sendTelemetry(currentData);
             edge.pollCommands();        
             edge.processCommandQueue();
+            incidentManager.pollIncidents(); // NUEVO: Poll incidentes del sistema de alertas            
+            incidentManager.process();  // NUEVO: Procesa ACKs pendientes
         }
         
         // Reporte periódico por Serial
@@ -308,6 +384,7 @@ void ClairDevice::update() {
         }
     }
 }
+
 
 void ClairDevice::printEdgeStats() {
     edge.printStats();
@@ -407,6 +484,22 @@ void ClairDevice::handle(Command command) {
              command.id == OLEDDisplay::DISPLAY_SLEEP_COMMAND ||
              command.id == OLEDDisplay::DISPLAY_WAKE_COMMAND) {
         display.handle(command);
+    }
+
+    // NUEVOS: Comandos para control manual del LED
+    if (command.id == 3000) {  // LED_ON
+        warningLed.setColor(true, true, true);
+        Serial.println("[LED] Manual ON");
+    }
+    else if (command.id == 3001) {  // LED_OFF
+        warningLed.off();
+        Serial.println("[LED] Manual OFF");
+    }
+    else if (command.id == 3002) {  // LED_BLINK (opcional)
+        // Implementar blink
+    }
+    else if (command.id == 3003) {  // ACKNOWLEDGE_ALL        
+        Serial.println("[LED] All incidents acknowledged");
     }
 }
 

@@ -14,7 +14,8 @@
 #define API_KEY "huCHrR5PWwUE-5nFUJBXyokXJW29vn_yRgOdzlOBkkM"
 
 #define CLOUD_SEND_INTERVAL 10000      // 10 segundos - telemetría al Cloud
-#define REMOTE_POLL_INTERVAL 10000     // 10 segundos - comandos desde Edge
+#define REMOTE_COMMAND_POLL_INTERVAL 5000     // 5 segundos - comandos desde Edge
+#define REMOTE_INCIDENT_POLL_INTERVAL 5000     // 5 segundos - incidentes desde Edge
 
 #define CLAIR_SIMULATION_MODE false
 
@@ -43,7 +44,12 @@ void setup() {
     
     // TERCERO: Configurar Edge Service
     clair.setupEdge(EDGE_BASE_URL, HARDWARE_ID, API_KEY, 
-                    CLOUD_SEND_INTERVAL, REMOTE_POLL_INTERVAL);
+                    CLOUD_SEND_INTERVAL, REMOTE_COMMAND_POLL_INTERVAL);
+
+    // NUEVO: Configurar Incident Manager para alertas
+    clair.setupIncidentManager(EDGE_BASE_URL, HARDWARE_ID, API_KEY, 
+                                REMOTE_INCIDENT_POLL_INTERVAL);
+
     
     // CUARTO: Los sensores se inicializan en background
     clair.setSimulationEnabled(CLAIR_SIMULATION_MODE);

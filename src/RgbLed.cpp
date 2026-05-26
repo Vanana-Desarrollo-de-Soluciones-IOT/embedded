@@ -2,15 +2,17 @@
 #include <Arduino.h>
 
 RgbLed::RgbLed(int redPin, int greenPin, int bluePin,
-               bool initialRed,
-               bool initialGreen,
-               bool initialBlue,
+               bool initialRed,    // false por defecto
+               bool initialGreen,  // false por defecto  
+               bool initialBlue,   // false por defecto
                CommandHandler* commandHandler,
-               bool commonAnode)
+               bool commonAnode)   // true por defecto (ANODO COMÚN)
     : Actuator(-1, commandHandler),
       redPin(redPin), greenPin(greenPin), bluePin(bluePin),
-      commonAnode(commonAnode),
-      redState(initialRed), greenState(initialGreen), blueState(initialBlue) {
+      commonAnode(commonAnode),  // true por defecto
+      redState(initialRed),      // false
+      greenState(initialGreen),  // false
+      blueState(initialBlue) {   // false
     pinMode(redPin, OUTPUT);
     pinMode(greenPin, OUTPUT);
     pinMode(bluePin, OUTPUT);

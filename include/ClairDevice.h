@@ -12,6 +12,8 @@
 #include "RgbLed.h" 
 #include "WiFiService.h"
 #include "EdgeService.h"
+#include "IncidentManager.h"
+
 
 /**
  * @brief Pin configuration structure for Clair System
@@ -74,6 +76,8 @@ private:
     // RGB status control
     AirQualityStatus lastDisplayedStatus;
     bool displayInitialized;
+
+    IncidentManager incidentManager;  // NUEVO
     
     // Private methods
     void updateAirQualityData();
@@ -84,6 +88,9 @@ private:
     void refreshDisplay();
     void updateSimulationData();
     void updateInitialization();
+
+    static void onIncidentDetected(const Incident& incident);
+    static void onIncidentResolved(const Incident& incident);
 
     // Callback para procesar comandos remotos
     static bool processRemoteCommand(const RemoteCommand& cmd);
@@ -113,6 +120,14 @@ public:
     static const int REMOTE_STANDBY_COMMAND = 2000;
     static const int REMOTE_WAKE_COMMAND = 2001;
     static const int REMOTE_RESTART_COMMAND = 2002;
+
+    // NUEVO: Método para inicializar incident manager
+    void setupIncidentManager(const String& baseUrl, const String& hardwareId, 
+                              const String& apiKey, unsigned long pollInterval = 5000);
+    
+    // NUEVO: Método para verificar incidentes
+    bool hasActiveIncidents() const { return incidentManager.hasActiveIncidents(); }
+        
     
     // Constructor with pin struct
     ClairDevice(const ClairPins& pins = ClairPins(), 
