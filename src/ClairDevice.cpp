@@ -21,7 +21,7 @@ ClairDevice::ClairDevice(const ClairPins& pins,
     : scd41Device(pins.scd41_sda, pins.scd41_scl, scd41Interval),
       pms5003Device(pins.pms_rx, pins.pms_tx, pins.pms_set, pins.pms_reset, pmsInterval),
       display(128, 64, displaySda, displayScl, 0x3C, this),
-      warningLed(pins.rgb_red, pins.rgb_green, pins.rgb_blue, false, false, false, this, true),
+      warningLed(pins.rgb_red, pins.rgb_green, pins.rgb_blue, false, false, false, this, true, true),
       lastReportTime(0),
       reportInterval(reportInterval),
       allSensorsReady(false),
@@ -36,7 +36,12 @@ ClairDevice::ClairDevice(const ClairPins& pins,
       lastNTPSync(0),
       ntpSyncInterval(3600000),  // 1 hora
       timezoneOffset(-18000), // UTC-5 por defecto
-      standbyMode(false) {}  
+      standbyMode(false),
+      ledMode(LED_MODE_INCIDENT),
+      activeColorCount(0),
+      lastBlinkTime(0),
+      blinkState(false),
+      blinkInterval(500) {}  
 
 // Inicializar sistema
 bool ClairDevice::begin() {
@@ -52,12 +57,146 @@ bool ClairDevice::begin() {
     scd41Device.getSensor().begin();
     pms5003Device.getSensor().begin();
     display.begin();
+    warningLed.off();  // Forzar apagado
     
     // Pasar al estado de espera
     initState = INIT_WAITING_SENSORS;
+    ledMode = LED_MODE_INCIDENT;
     
     // No esperar aquí - la inicialización continuará en update()
     return true;  // Siempre retorna true, la inicialización continúa en background
+}
+
+void ClairDevice::addIncidentColor(const String& metric) {
+    // Verificar si ya existe este color
+    for (int i = 0; i < activeColorCount; i++) {
+        if (activeColors[i].active && activeColors[i].metric == metric) {
+            Serial.printf("[LED] Color for %s already active\n", metric.c_str());
+            return;
+        }
+    }
+    
+    // Determinar color según métrica
+    bool red = false, green = false, blue = false;
+    
+    if (metric == "CO2") {
+        red = true; green = false; blue = false;
+        Serial.println("[LED] ➕ Adding RED for CO2");
+    } 
+    else if (metric == "PM25") {
+        red = true; green = true; blue = false;
+        Serial.println("[LED] ➕ Adding YELLOW for PM2.5");
+    }
+    else if (metric == "TEMP") {
+        red = false; green = false; blue = true;
+        Serial.println("[LED] ➕ Adding BLUE for Temperature");
+    }
+    else if (metric == "HUMIDITY") {
+        red = false; green = true; blue = true;
+        Serial.println("[LED] ➕ Adding CYAN for Humidity");
+    }
+    else {
+        red = true; green = true; blue = true;
+        Serial.println("[LED] ➕ Adding WHITE for other incident");
+    }
+    
+    // Agregar a la lista de colores activos
+    if (activeColorCount < MAX_ACTIVE_COLORS) {
+        activeColors[activeColorCount] = ActiveColor(metric, red, green, blue);
+        activeColorCount++;
+        
+        Serial.printf("[LED] Active colors count: %d\n", activeColorCount);
+    } else {
+        Serial.println("[LED] ERROR: Max active colors reached!");
+    }
+}
+
+void ClairDevice::removeIncidentColor(const String& metric) {
+    // Buscar y eliminar el color
+    for (int i = 0; i < activeColorCount; i++) {
+        if (activeColors[i].active && activeColors[i].metric == metric) {
+            // Desplazar los elementos restantes
+            for (int j = i; j < activeColorCount - 1; j++) {
+                activeColors[j] = activeColors[j + 1];
+            }
+            activeColorCount--;
+            
+            Serial.printf("[LED] ➖ Removed color for %s - Active colors: %d\n", 
+                          metric.c_str(), activeColorCount);
+            return;
+        }
+    }
+}
+
+void ClairDevice::calculateCompositeColor(bool& red, bool& green, bool& blue) {
+    red = false;
+    green = false;
+    blue = false;
+    
+    // Mezclar todos los colores activos (OR lógico)
+    for (int i = 0; i < activeColorCount; i++) {
+        if (activeColors[i].active) {
+            red |= activeColors[i].red;
+            green |= activeColors[i].green;
+            blue |= activeColors[i].blue;
+        }
+    }
+    
+    // Debug: Mostrar composición si hay cambios significativos
+    static bool lastRed = false, lastGreen = false, lastBlue = false;
+    if (red != lastRed || green != lastGreen || blue != lastBlue) {
+        Serial.print("[LED] Composite color: R=");
+        Serial.print(red ? "1" : "0");
+        Serial.print(" G=");
+        Serial.print(green ? "1" : "0");
+        Serial.print(" B=");
+        Serial.println(blue ? "1" : "0");
+        
+        lastRed = red;
+        lastGreen = green;
+        lastBlue = blue;
+    }
+}
+
+void ClairDevice::updateBlinkingLed() {
+    unsigned long now = millis();
+    
+    // Calcular color compuesto basado en incidentes activos
+    bool targetRed, targetGreen, targetBlue;
+    calculateCompositeColor(targetRed, targetGreen, targetBlue);
+    
+    // Si no hay colores activos, asegurar que el LED esté apagado
+    if (activeColorCount == 0) {
+        if (blinkState) {  // Solo apagar si estaba encendido
+            warningLed.off();
+            blinkState = false;
+            Serial.println("[LED] ⚫ OFF - No active incidents");
+        }
+        return;
+    }
+    
+    // Control de parpadeo
+    if (now - lastBlinkTime >= blinkInterval) {
+        lastBlinkTime = now;
+        blinkState = !blinkState;
+        
+        if (blinkState) {
+            // Encender con el color compuesto
+            warningLed.setColor(targetRed, targetGreen, targetBlue);
+            
+            // Debug opcional: mostrar qué colores están activos
+            Serial.print("[LED] Blink ON - Colors: ");
+            for (int i = 0; i < activeColorCount; i++) {
+                Serial.print(activeColors[i].metric);
+                if (i < activeColorCount - 1) Serial.print(", ");
+            }
+            Serial.println();
+        } else {
+            // Apagar completamente
+            warningLed.off();
+            // No imprimir en cada apagado para evitar spam
+        }
+    }
 }
 
 // Callback estático para procesar comandos remotos
@@ -108,71 +247,14 @@ bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
     return true;
 }
 
-void ClairDevice::onIncidentDetected(const Incident& incident) {
-    Serial.println("\n🔴🔴🔴 INCIDENT ACTIVATED 🔴🔴🔴");
-    incident.print();
-    
-    extern ClairDevice* g_clairDevice;
-    if (g_clairDevice) {
-        RgbLed& led = g_clairDevice->getWarningLed();
-        
-        // Determinar color del LED según la métrica
-        if (incident.metric == "CO2") {
-            led.setColor(true, false, false);  // ROJO para CO2
-            Serial.println("[LED] 🔴 RED - CO2 incident ACTIVE");
-        } 
-        else if (incident.metric == "PM25") {
-            led.setColor(true, true, false);   // AMARILLO para PM2.5
-            Serial.println("[LED] 🟡 YELLOW - PM2.5 incident ACTIVE");
-        }
-        else if (incident.metric == "TEMP") {
-            led.setColor(false, false, true);  // AZUL para temperatura
-            Serial.println("[LED] 🔵 BLUE - Temperature incident ACTIVE");
-        }
-        else if (incident.metric == "HUMIDITY") {
-            led.setColor(false, true, true);   // CYAN para humedad
-            Serial.println("[LED] 💠 CYAN - Humidity incident ACTIVE");
-        }
-        else {
-            led.setColor(true, true, true);    // BLANCO para otros
-            Serial.println("[LED] ⚪ WHITE - Other incident ACTIVE");
-        }
-        
-        // Opcional: Enviar ACK automático
-        // g_clairDevice->incidentManager.sendAck(incident);
-    }
-}
-
-void ClairDevice::onIncidentResolved(const Incident& incident) {
-    Serial.println("\n🟢🟢🟢 INCIDENT RESOLVED 🟢🟢🟢");
-    incident.print();
-    
-    extern ClairDevice* g_clairDevice;
-    if (g_clairDevice) {
-        RgbLed& led = g_clairDevice->getWarningLed();
-        
-        // Verificar si hay más incidentes activos
-        if (!g_clairDevice->incidentManager.hasActiveIncidents()) {
-            led.off();
-            Serial.println("[LED] ⚫ OFF - No active incidents");
-        } else {
-            // Si hay otros incidentes, mostrar el más crítico
-            Incident mostCritical = g_clairDevice->incidentManager.getMostCriticalIncident();
-            Serial.printf("[LED] Still %d active incident(s), updating LED for: %s\n", 
-                         g_clairDevice->incidentManager.getActiveCount(), 
-                         mostCritical.metric.c_str());
-            
-            // Actualizar LED con el incidente más crítico
-            if (mostCritical.metric == "CO2") {
-                led.setColor(true, false, false);
-            } else if (mostCritical.metric == "PM25") {
-                led.setColor(true, true, false);
-            } else if (mostCritical.metric == "TEMP") {
-                led.setColor(false, false, true);
-            } else if (mostCritical.metric == "HUMIDITY") {
-                led.setColor(false, true, true);
-            }
-        }
+// En ClairDevice.cpp
+void ClairDevice::updateLedByAirQuality() {
+    if (currentData.status == CRITICAL) {
+        warningLed.setColor(true, false, false);   // ROJO
+    } else if (currentData.status == MODERATE) {
+        warningLed.setColor(true, true, false);    // AMARILLO
+    } else {
+        warningLed.setColor(false, true, false);   // VERDE
     }
 }
 
@@ -353,16 +435,17 @@ void ClairDevice::update() {
             pms5003Device.update();
             updateAirQualityData();
             updateParticulateMatterData();
-        }
+        }        
         
-        // Actualizar LED y Display
-        updateWarningLed();              
+        // Actualizar LED y Display                  
         if (!displayInitialized || currentData.status != lastDisplayedStatus) {
             refreshDisplay();
             lastDisplayedStatus = currentData.status;
             displayInitialized = true;
         }
         display.autoPowerManagement();
+
+        updateBlinkingLed();    
         
         // Mantener WiFi y NTP
         wifi.update();
@@ -382,6 +465,31 @@ void ClairDevice::update() {
             generateUnifiedReport();
             lastReportTime = now;
         }
+    }
+}
+
+// Callbacks de incidentes
+void ClairDevice::onIncidentDetected(const Incident& incident) {
+    Serial.println("\n🔴🔴🔴 INCIDENT ACTIVATED 🔴🔴🔴");
+    incident.print();
+    
+    extern ClairDevice* g_clairDevice;
+    if (g_clairDevice) {
+        // Agregar el color del incidente
+        g_clairDevice->addIncidentColor(incident.metric);
+        // NOTA: No llamar a updateLedByIncidents()
+    }
+}
+
+void ClairDevice::onIncidentResolved(const Incident& incident) {
+    Serial.println("\n🟢🟢🟢 INCIDENT RESOLVED 🟢🟢🟢");
+    incident.print();
+    
+    extern ClairDevice* g_clairDevice;
+    if (g_clairDevice) {
+        // Remover el color del incidente
+        g_clairDevice->removeIncidentColor(incident.metric);
+        // NOTA: No llamar a updateLedByIncidents()
     }
 }
 
@@ -438,15 +546,6 @@ void ClairDevice::updateParticulateMatterData() {
     currentData.evaluateStatus(thresholds);
 }
 
-void ClairDevice::updateWarningLed() {
-    if (currentData.status == CRITICAL) {
-        warningLed.setColor(true, false, false);
-    } else if (currentData.status == MODERATE) {
-        warningLed.setColor(true, true, false);
-    } else {
-        warningLed.setColor(false, true, false);
-    }
-}
 
 // Generate unified report and update display
 void ClairDevice::generateUnifiedReport() {

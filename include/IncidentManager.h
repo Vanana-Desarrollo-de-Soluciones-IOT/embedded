@@ -268,29 +268,33 @@ private:
 
     void resolveIncident(int id, const String& resolvedAt) {
         int index = findIncidentById(id);
-        if (index >= 0) {
-            Incident resolved = activeIncidents[index];
-            resolved.status = "RESOLVED";
-            resolved.resolvedAt = resolvedAt;
-            
-            Serial.printf("[IncidentManager] Incident #%d (%s) resolved\n", 
-                          id, resolved.metric.c_str());
-            
-            // Notificar resolución (apaga LED o actualiza)
-            if (onIncidentResolved) {
-                onIncidentResolved(resolved);
-            }
-            
-            // Encolar ACK para estado RESOLVED
-            queueAck(id, "RESOLVED");
-            
-            // Eliminar del array activo
-            for (int i = index; i < incidentCount - 1; i++) {
-                activeIncidents[i] = activeIncidents[i + 1];
-            }
-            incidentCount--;
+    if (index >= 0) {
+        Incident resolved = activeIncidents[index];
+        resolved.status = "RESOLVED";
+        resolved.resolvedAt = resolvedAt;
+        
+        Serial.printf("[IncidentManager] Incident #%d (%s) resolved - Removing from active list\n", 
+                      id, resolved.metric.c_str());
+        
+        // Notificar resolución ANTES de eliminar
+        if (onIncidentResolved) {
+            onIncidentResolved(resolved);
         }
+        
+        // Encolar ACK
+        queueAck(id, "RESOLVED");
+        
+        // 🔧 IMPORTANTE: Eliminar del array activo
+        for (int i = index; i < incidentCount - 1; i++) {
+            activeIncidents[i] = activeIncidents[i + 1];
+        }
+        incidentCount--;
+        
+        Serial.printf("[IncidentManager] Active incidents remaining: %d\n", incidentCount);
+    } else {
+        Serial.printf("[IncidentManager] WARNING: Attempted to resolve incident #%d but not found in active list\n", id);
     }
+}
     
 public:
     IncidentManager() 
@@ -374,18 +378,32 @@ public:
                         incident.occurredAt = occurredAt;
                         incident.resolvedAt = resolvedAt;
                         incident.acknowledged = false;
-                        addIncident(incident);  // Aquí se encola ACK para ACTIVE
+                        addIncident(incident);
                     }
                 } 
                 else if (status == "RESOLVED") {
+                    // 🔧 CORRECCIÓN: Siempre resolver, incluso si no está en la lista
                     if (existingIndex >= 0) {
-                        // Incidente activo que se resolvió
-                        resolveIncident(id, resolvedAt);  // Aquí se encola ACK para RESOLVED
+                        // Está en la lista activa - resolver normalmente
+                        resolveIncident(id, resolvedAt);
                     } else {
-                        // Incidente resuelto que no estaba en nuestra lista activa
-                        // Aún así, enviar ACK para RESOLVED
-                        Serial.printf("[IncidentManager] Resolved incident #%d not in active list, sending ACK\n", id);
+                        // No está en la lista activa pero está resuelto
+                        // Asegurar que no quede ningún estado pendiente
+                        Serial.printf("[IncidentManager] Incident #%d resolved but not in active list - ensuring clean state\n", id);
+                        
+                        // Encolar ACK para RESOLVED de todas formas
                         queueAck(id, "RESOLVED");
+                        
+                        // Verificar si hay que limpiar algún estado residual
+                        // (forzar callback de resolución por si acaso)
+                        if (onIncidentResolved) {
+                            Incident dummyIncident;
+                            dummyIncident.id = id;
+                            dummyIncident.metric = metric;
+                            dummyIncident.status = "RESOLVED";
+                            dummyIncident.resolvedAt = resolvedAt;
+                            onIncidentResolved(dummyIncident);
+                        }
                     }
                 }
             }
@@ -393,16 +411,21 @@ public:
         }
     } 
     else if (httpCode == 404 || httpCode == 204) {
+        // 🔧 CORRECCIÓN: Si no hay incidentes pendientes, limpiar TODO
         httpClient.end();
+        
         if (incidentCount > 0) {
-            Serial.printf("[IncidentManager] All %d incidents resolved\n", incidentCount);
-            // Enviar ACK para todos los incidentes activos como RESOLVED
+            Serial.printf("[IncidentManager] No pending incidents - Clearing all %d active incidents\n", incidentCount);
+            
+            // Notificar resolución para todos los incidentes activos
             for (int i = 0; i < incidentCount; i++) {
-                queueAck(activeIncidents[i].id, "RESOLVED");
                 if (onIncidentResolved) {
                     onIncidentResolved(activeIncidents[i]);
                 }
+                queueAck(activeIncidents[i].id, "RESOLVED");
             }
+            
+            // Limpiar completamente la lista de incidentes activos
             incidentCount = 0;
         }
         return false;

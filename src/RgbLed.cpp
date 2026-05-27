@@ -2,21 +2,24 @@
 #include <Arduino.h>
 
 RgbLed::RgbLed(int redPin, int greenPin, int bluePin,
-               bool initialRed,    // false por defecto
-               bool initialGreen,  // false por defecto  
-               bool initialBlue,   // false por defecto
-               CommandHandler* commandHandler,
-               bool commonAnode)   // true por defecto (ANODO COMÚN)
+               bool initialRed, bool initialGreen, bool initialBlue,
+               CommandHandler* commandHandler, bool commonAnode,
+               bool autoManage)
     : Actuator(-1, commandHandler),
       redPin(redPin), greenPin(greenPin), bluePin(bluePin),
-      commonAnode(commonAnode),  // true por defecto
-      redState(initialRed),      // false
-      greenState(initialGreen),  // false
-      blueState(initialBlue) {   // false
+      commonAnode(commonAnode),
+      redState(initialRed), greenState(initialGreen), blueState(initialBlue),
+      autoManage(autoManage) {
     pinMode(redPin, OUTPUT);
     pinMode(greenPin, OUTPUT);
     pinMode(bluePin, OUTPUT);
-    setColor(initialRed, initialGreen, initialBlue);
+
+     // Solo aplicar si NO está en modo automático
+    if (!autoManage) {
+    setColor(initialRed, initialGreen, initialBlue);  // Aplica colores iniciales
+    } else {
+    off();  // Solo si autoManage = true
+    }
 }
 
 void RgbLed::applyPin(int pin, bool on) {

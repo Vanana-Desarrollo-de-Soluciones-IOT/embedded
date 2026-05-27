@@ -48,6 +48,40 @@ private:
         INIT_COMPLETE,
         INIT_PARTIAL
     };
+
+    enum LedMode {        
+        LED_MODE_INCIDENT       // LED refleja incidentes        
+    };
+    LedMode ledMode;
+
+    struct ActiveColor {
+        String metric;
+        bool red;
+        bool green;
+        bool blue;
+        unsigned long addedAt;
+        bool active;
+        
+        ActiveColor() : metric(""), red(false), green(false), blue(false), addedAt(0), active(false) {}
+        ActiveColor(String m, bool r, bool g, bool b) 
+            : metric(m), red(r), green(g), blue(b), addedAt(millis()), active(true) {}
+    };
+
+    static const int MAX_ACTIVE_COLORS = 5;
+    ActiveColor activeColors[MAX_ACTIVE_COLORS];
+    int activeColorCount;
+    
+    // Control de parpadeo
+    unsigned long lastBlinkTime;
+    bool blinkState;  // true = encendido, false = apagado
+    unsigned long blinkInterval;  // Intervalo de parpadeo en ms
+
+    struct LastLedState {
+        bool red = false;
+        bool green = false;
+        bool blue = false;
+    } lastLedState;
+
     InitState initState;
     unsigned long initStartTime;
     static const unsigned long INIT_TIMEOUT_MS = 10000;  // 10 segundos máximo
@@ -88,6 +122,12 @@ private:
     void refreshDisplay();
     void updateSimulationData();
     void updateInitialization();
+    void updateLedByAirQuality();
+    void updateLedByIncidents();
+    void addIncidentColor(const String& metric);
+    void removeIncidentColor(const String& metric);
+    void updateBlinkingLed();
+    void calculateCompositeColor(bool& red, bool& green, bool& blue);
 
     static void onIncidentDetected(const Incident& incident);
     static void onIncidentResolved(const Incident& incident);
@@ -120,6 +160,7 @@ public:
     static const int REMOTE_STANDBY_COMMAND = 2000;
     static const int REMOTE_WAKE_COMMAND = 2001;
     static const int REMOTE_RESTART_COMMAND = 2002;
+    static const int REMOTE_SET_THRESHOLDS_COMMAND = 2003;
 
     // NUEVO: Método para inicializar incident manager
     void setupIncidentManager(const String& baseUrl, const String& hardwareId, 
@@ -135,7 +176,7 @@ public:
                 unsigned long pmsInterval = 2000,
                 unsigned long reportInterval = 10000,
                 int displaySda = 21,
-                int displayScl = 22);
+                int displayScl = 22);  
     
     // Constructor with individual parameters
     ClairDevice(int sda, int scl, int rx, int tx, int set, int reset,
@@ -209,7 +250,8 @@ public:
     bool isTimeSynchronized() const { return timeSynchronized; }
     String getFormattedTime();  // Retorna "HH:MM:SS"
     unsigned long getCurrentEpoch();  // Retorna segundos desde 1970     
-    
+    void setLedMode(LedMode mode) { ledMode = mode; }
+    LedMode getLedMode() const { return ledMode; }
 };
 
 #endif // CLAIR_DEVICE_H

@@ -12,6 +12,7 @@ private:
     bool redState;
     bool greenState;
     bool blueState;
+    bool autoManage;  // NUEVO: Control automático vs manual
 
     void applyPin(int pin, bool on);
 
@@ -21,8 +22,11 @@ public:
            bool initialGreen = false,
            bool initialBlue = false,
            CommandHandler* commandHandler = nullptr,
-           bool commonAnode = true);
+           bool commonAnode = true,
+           bool autoManage = true);  // NUEVO parámetro
 
+    void setAutoManage(bool enable) { autoManage = enable; }
+    bool isAutoManage() const { return autoManage; }
     void handle(Command command) override;
     void setColor(bool red, bool green, bool blue);
     void off();
