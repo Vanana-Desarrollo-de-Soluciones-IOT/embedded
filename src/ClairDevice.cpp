@@ -1,3 +1,5 @@
+// ClairDevice.cpp - Versión limpia solo con LED simple
+
 #include "ClairDevice.h"
 #include <Arduino.h>
 #include <time.h>
@@ -9,9 +11,8 @@ static const unsigned long SIM_PHASE_CRITICAL_DURATION = 3000UL;
 static const unsigned long SIM_CYCLE_DURATION = SIM_PHASE_OPTIMAL_DURATION + 
                                                   SIM_PHASE_MODERATE_DURATION + 
                                                   SIM_PHASE_CRITICAL_DURATION;
-static const unsigned long STANDBY_POLL_INTERVAL = 60000;  // En standby, consultar cada 60 segundos
 
-// Constructor con struct
+// Constructor con struct de pines
 ClairDevice::ClairDevice(const ClairPins& pins, 
                          unsigned long scd41Interval,
                          unsigned long pmsInterval,
@@ -21,7 +22,7 @@ ClairDevice::ClairDevice(const ClairPins& pins,
     : scd41Device(pins.scd41_sda, pins.scd41_scl, scd41Interval),
       pms5003Device(pins.pms_rx, pins.pms_tx, pins.pms_set, pins.pms_reset, pmsInterval),
       display(128, 64, displaySda, displayScl, 0x3C, this),
-      warningLed(pins.rgb_red, pins.rgb_green, pins.rgb_blue, false, false, false, this, true, true),
+      warningLed(pins.led_pin, false, true, this),  // LED simple: pin, initialState=false, activeHigh=true
       lastReportTime(0),
       reportInterval(reportInterval),
       allSensorsReady(false),
@@ -34,18 +35,40 @@ ClairDevice::ClairDevice(const ClairPins& pins,
       initTimeoutOccurred(false),
       timeSynchronized(false),
       lastNTPSync(0),
-      ntpSyncInterval(3600000),  // 1 hora
-      timezoneOffset(-18000), // UTC-5 por defecto
-      standbyMode(false),
-      ledMode(LED_MODE_INCIDENT),
-      activeColorCount(0),
-      lastBlinkTime(0),
-      blinkState(false),
-      blinkInterval(500) {}  
+      ntpSyncInterval(3600000),
+      timezoneOffset(-18000),
+      standbyMode(false) {}
+
+// Constructor con parámetros individuales
+ClairDevice::ClairDevice(int sda, int scl, int rx, int tx, int set, int reset,
+                         unsigned long scd41Interval,
+                         unsigned long pmsInterval,
+                         unsigned long reportInterval,
+                         int displaySda,
+                         int displayScl,
+                         int ledPin)
+    : scd41Device(sda, scl, scd41Interval),
+      pms5003Device(rx, tx, set, reset, pmsInterval),
+      display(128, 64, displaySda, displayScl, 0x3C, this),
+      warningLed(ledPin, false, true, this),  // LED simple
+      lastReportTime(0),
+      reportInterval(reportInterval),
+      allSensorsReady(false),
+      simulationEnabled(false),
+      simulationStartTime(0),
+      lastDisplayedStatus(OPTIMAL),
+      displayInitialized(false),
+      initState(INIT_NOT_STARTED),
+      initStartTime(0),
+      initTimeoutOccurred(false),
+      timeSynchronized(false),
+      lastNTPSync(0),
+      ntpSyncInterval(3600000),
+      timezoneOffset(-18000),
+      standbyMode(false) {}
 
 // Inicializar sistema
 bool ClairDevice::begin() {
-    // Iniciar proceso de inicialización NO bloqueante
     initState = INIT_STARTING_SENSORS;
     initStartTime = millis();
     initTimeoutOccurred = false;
@@ -53,150 +76,14 @@ bool ClairDevice::begin() {
     
     Serial.println("[ClairDevice] Starting non-blocking initialization...");
     
-    // Iniciar sensores (son operaciones rápidas, no bloqueantes)
     scd41Device.getSensor().begin();
     pms5003Device.getSensor().begin();
     display.begin();
-    warningLed.off();  // Forzar apagado
+    warningLed.off();  // Forzar LED apagado
     
-    // Pasar al estado de espera
     initState = INIT_WAITING_SENSORS;
-    ledMode = LED_MODE_INCIDENT;
     
-    // No esperar aquí - la inicialización continuará en update()
-    return true;  // Siempre retorna true, la inicialización continúa en background
-}
-
-void ClairDevice::addIncidentColor(const String& metric) {
-    // Verificar si ya existe este color
-    for (int i = 0; i < activeColorCount; i++) {
-        if (activeColors[i].active && activeColors[i].metric == metric) {
-            Serial.printf("[LED] Color for %s already active\n", metric.c_str());
-            return;
-        }
-    }
-    
-    // Determinar color según métrica
-    bool red = false, green = false, blue = false;
-    
-    if (metric == "CO2") {
-        red = true; green = false; blue = false;
-        Serial.println("[LED] ➕ Adding RED for CO2");
-    } 
-    else if (metric == "PM25") {
-        red = true; green = true; blue = false;
-        Serial.println("[LED] ➕ Adding YELLOW for PM2.5");
-    }
-    else if (metric == "TEMP") {
-        red = false; green = false; blue = true;
-        Serial.println("[LED] ➕ Adding BLUE for Temperature");
-    }
-    else if (metric == "HUMIDITY") {
-        red = false; green = true; blue = true;
-        Serial.println("[LED] ➕ Adding CYAN for Humidity");
-    }
-    else {
-        red = true; green = true; blue = true;
-        Serial.println("[LED] ➕ Adding WHITE for other incident");
-    }
-    
-    // Agregar a la lista de colores activos
-    if (activeColorCount < MAX_ACTIVE_COLORS) {
-        activeColors[activeColorCount] = ActiveColor(metric, red, green, blue);
-        activeColorCount++;
-        
-        Serial.printf("[LED] Active colors count: %d\n", activeColorCount);
-    } else {
-        Serial.println("[LED] ERROR: Max active colors reached!");
-    }
-}
-
-void ClairDevice::removeIncidentColor(const String& metric) {
-    // Buscar y eliminar el color
-    for (int i = 0; i < activeColorCount; i++) {
-        if (activeColors[i].active && activeColors[i].metric == metric) {
-            // Desplazar los elementos restantes
-            for (int j = i; j < activeColorCount - 1; j++) {
-                activeColors[j] = activeColors[j + 1];
-            }
-            activeColorCount--;
-            
-            Serial.printf("[LED] ➖ Removed color for %s - Active colors: %d\n", 
-                          metric.c_str(), activeColorCount);
-            return;
-        }
-    }
-}
-
-void ClairDevice::calculateCompositeColor(bool& red, bool& green, bool& blue) {
-    red = false;
-    green = false;
-    blue = false;
-    
-    // Mezclar todos los colores activos (OR lógico)
-    for (int i = 0; i < activeColorCount; i++) {
-        if (activeColors[i].active) {
-            red |= activeColors[i].red;
-            green |= activeColors[i].green;
-            blue |= activeColors[i].blue;
-        }
-    }
-    
-    // Debug: Mostrar composición si hay cambios significativos
-    static bool lastRed = false, lastGreen = false, lastBlue = false;
-    if (red != lastRed || green != lastGreen || blue != lastBlue) {
-        Serial.print("[LED] Composite color: R=");
-        Serial.print(red ? "1" : "0");
-        Serial.print(" G=");
-        Serial.print(green ? "1" : "0");
-        Serial.print(" B=");
-        Serial.println(blue ? "1" : "0");
-        
-        lastRed = red;
-        lastGreen = green;
-        lastBlue = blue;
-    }
-}
-
-void ClairDevice::updateBlinkingLed() {
-    unsigned long now = millis();
-    
-    // Calcular color compuesto basado en incidentes activos
-    bool targetRed, targetGreen, targetBlue;
-    calculateCompositeColor(targetRed, targetGreen, targetBlue);
-    
-    // Si no hay colores activos, asegurar que el LED esté apagado
-    if (activeColorCount == 0) {
-        if (blinkState) {  // Solo apagar si estaba encendido
-            warningLed.off();
-            blinkState = false;
-            Serial.println("[LED] ⚫ OFF - No active incidents");
-        }
-        return;
-    }
-    
-    // Control de parpadeo
-    if (now - lastBlinkTime >= blinkInterval) {
-        lastBlinkTime = now;
-        blinkState = !blinkState;
-        
-        if (blinkState) {
-            // Encender con el color compuesto
-            warningLed.setColor(targetRed, targetGreen, targetBlue);
-            
-            // Debug opcional: mostrar qué colores están activos
-            Serial.print("[LED] Blink ON - Colors: ");
-            for (int i = 0; i < activeColorCount; i++) {
-                Serial.print(activeColors[i].metric);
-                if (i < activeColorCount - 1) Serial.print(", ");
-            }
-            Serial.println();
-        } else {
-            // Apagar completamente
-            warningLed.off();
-            // No imprimir en cada apagado para evitar spam
-        }
-    }
+    return true;
 }
 
 // Callback estático para procesar comandos remotos
@@ -204,9 +91,7 @@ bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
     Serial.printf("[ClairDevice] Command received: ID=%s, TYPE=%s\n", 
                   cmd.commandId.c_str(), cmd.type.c_str());
     
-    // Obtener referencia al dispositivo (necesitamos una instancia global)
-    // Para esto, necesitamos una variable global o un singleton
-    extern ClairDevice* g_clairDevice;  // Declarar en main.cpp
+    extern ClairDevice* g_clairDevice;
     
     if (cmd.type == "STANDBY") {
         Serial.println("[ClairDevice] → Executing STANDBY command");
@@ -224,7 +109,7 @@ bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
     }
     else if (cmd.type == "RESTART") {
         Serial.println("[ClairDevice] → Executing RESTART command");
-        // TODO: Implementar restart lógica
+        // TODO: Implementar restart
         return true;
     }
     else if (cmd.type == "REPORT") {
@@ -236,28 +121,16 @@ bool ClairDevice::processRemoteCommand(const RemoteCommand& cmd) {
     }
     else if (cmd.type == "CALIBRATE") {
         Serial.println("[ClairDevice] → Executing CALIBRATE command");
-        // TODO: Implementar calibrate lógica
+        // TODO: Implementar calibración
         return true;
     }
     else {
         Serial.printf("[ClairDevice] → Unknown command type: %s\n", cmd.type.c_str());
         return false;
     }
-    
-    return true;
 }
 
-// En ClairDevice.cpp
-void ClairDevice::updateLedByAirQuality() {
-    if (currentData.status == CRITICAL) {
-        warningLed.setColor(true, false, false);   // ROJO
-    } else if (currentData.status == MODERATE) {
-        warningLed.setColor(true, true, false);    // AMARILLO
-    } else {
-        warningLed.setColor(false, true, false);   // VERDE
-    }
-}
-
+// Configurar Incident Manager
 void ClairDevice::setupIncidentManager(const String& baseUrl, const String& hardwareId, 
                                         const String& apiKey, unsigned long pollInterval) {
     incidentManager.begin(baseUrl, hardwareId, apiKey, pollInterval);
@@ -265,6 +138,45 @@ void ClairDevice::setupIncidentManager(const String& baseUrl, const String& hard
     Serial.println("[ClairDevice] Incident Manager configured");
 }
 
+// Callbacks de incidentes
+void ClairDevice::onIncidentDetected(const Incident& incident) {
+    Serial.println("\n🔴🔴🔴 INCIDENT ACTIVATED 🔴🔴🔴");
+    incident.print();
+    // El LED se actualizará automáticamente en updateWarningLed()
+}
+
+void ClairDevice::onIncidentResolved(const Incident& incident) {
+    Serial.println("\n🟢🟢🟢 INCIDENT RESOLVED 🟢🟢🟢");
+    incident.print();
+    // El LED se actualizará automáticamente en updateWarningLed()
+}
+
+// Control del LED basado en incidentes
+void ClairDevice::updateWarningLed() {
+    if (standbyMode) {
+        warningLed.stopBlink();
+        return;
+    }
+    
+    // Comportamiento: LED parpadea si hay incidentes activos
+    if (incidentManager.hasActiveIncidents()) {
+        if (!warningLed.isBlinking()) {
+            warningLed.startBlink(500);  // Parpadeo cada 500ms
+            Serial.printf("[LED] 🔴 Blinking started - %d incident(s) active\n", 
+                          incidentManager.getActiveCount());
+        }
+    } else {
+        if (warningLed.isBlinking() || warningLed.getState()) {
+            warningLed.off();
+            Serial.println("[LED] ⚫ OFF - No incidents");
+        }
+    }
+    
+    // Necesario para actualizar el estado de parpadeo
+    warningLed.update();
+}
+
+// Inicializar NTP
 void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
     this->timezoneOffset = timezoneOffset;
     
@@ -274,7 +186,6 @@ void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
     Serial.print(ntpServer);
     Serial.println();
     
-    // Esperar hasta 10 segundos para sincronizar
     unsigned long start = millis();
     while (time(nullptr) < 100000 && (millis() - start < 10000)) {
         delay(100);
@@ -297,9 +208,8 @@ void ClairDevice::beginNTP(const char* ntpServer, long timezoneOffset) {
 
 void ClairDevice::updateNTP() {
     if (!timeSynchronized && wifi.isConnected()) {
-        // Reintentar sincronización si falló inicialmente
         unsigned long now = millis();
-        if (now - lastNTPSync > 30000) {  // Reintentar cada 30 segundos
+        if (now - lastNTPSync > 30000) {
             lastNTPSync = now;
             configTime(timezoneOffset, 0, "pool.ntp.org");
             
@@ -315,7 +225,6 @@ void ClairDevice::updateNTP() {
         }
     }
     
-    // Resincronizar periódicamente
     if (timeSynchronized && wifi.isConnected()) {
         if (millis() - lastNTPSync > ntpSyncInterval) {
             lastNTPSync = millis();
@@ -329,7 +238,7 @@ unsigned long ClairDevice::getCurrentEpoch() {
     if (timeSynchronized) {
         return time(nullptr);
     }
-    return 0;  // No sincronizado
+    return 0;
 }
 
 String ClairDevice::getFormattedTime() {
@@ -347,10 +256,10 @@ String ClairDevice::getFormattedTime() {
     return String(buffer);
 }
 
-// NUEVO método: Llamar desde update() hasta que INIT_COMPLETE
+// Actualizar inicialización no bloqueante
 void ClairDevice::updateInitialization() {
     if (initState == INIT_COMPLETE || initState == INIT_PARTIAL) {
-        return;  // Ya terminó
+        return;
     }
     
     unsigned long now = millis();
@@ -365,12 +274,11 @@ void ClairDevice::updateInitialization() {
             Serial.println("[ClairDevice] All sensors initialized successfully!");
         }
         else if (now - initStartTime >= INIT_TIMEOUT_MS) {
-            // Timeout - continuar con los sensores que funcionan
             initTimeoutOccurred = true;
             
             if (scd41Ready || pmsReady) {
                 initState = INIT_PARTIAL;
-                allSensorsReady = false;  // No todos están listos, pero podemos operar
+                allSensorsReady = false;
                 Serial.print("[ClairDevice] Initialization partial. SCD41: ");
                 Serial.print(scd41Ready ? "OK" : "FAIL");
                 Serial.print(", PMS5003: ");
@@ -396,38 +304,27 @@ const char* ClairDevice::getInitStateString() const {
 
 // Actualizar todos los sensores
 void ClairDevice::update() {    
-    // Gestionar inicialización no bloqueante
     updateInitialization();
     
-    // Solo procesar si la inicialización avanzó lo suficiente
     if (initState == INIT_COMPLETE || initState == INIT_PARTIAL) {
         
         unsigned long now = millis();
         
-        // === MODO STANDBY: SOLO MANTENER WiFi Y COMANDOS ===
+        // === MODO STANDBY ===
         if (standbyMode) {
-            // NO leer sensores
-            // NO actualizar LED
-            // NO actualizar display
-            // NO enviar telemetría
-            // NO generar reportes
-            
-            // SOLO mantener WiFi y procesar comandos
             wifi.update();
             
             if (wifi.isConnected()) {
-                edge.pollCommands();        // Buscar nuevos comandos
-                edge.processCommandQueue(); // Procesar comandos (incluyendo WAKE)                
+                edge.pollCommands();
+                edge.processCommandQueue();                
             }
             
-            // Pequeña pausa para no saturar el CPU
             delay(100);
-            return;  // Salir inmediatamente - nada más en STANDBY
+            return;
         }
         
-        // === MODO NORMAL: TODAS LAS OPERACIONES ===
+        // === MODO NORMAL ===
         
-        // Leer sensores
         if (simulationEnabled) {
             updateSimulationData();
         } else {
@@ -437,7 +334,6 @@ void ClairDevice::update() {
             updateParticulateMatterData();
         }        
         
-        // Actualizar LED y Display                  
         if (!displayInitialized || currentData.status != lastDisplayedStatus) {
             refreshDisplay();
             lastDisplayedStatus = currentData.status;
@@ -445,54 +341,25 @@ void ClairDevice::update() {
         }
         display.autoPowerManagement();
 
-        updateBlinkingLed();    
+        updateWarningLed();  // Control del LED
         
-        // Mantener WiFi y NTP
         wifi.update();
         updateNTP();
         
-        // Enviar telemetría al Edge
         if (wifi.isConnected()) {
             edge.sendTelemetry(currentData);
             edge.pollCommands();        
             edge.processCommandQueue();
-            incidentManager.pollIncidents(); // NUEVO: Poll incidentes del sistema de alertas            
-            incidentManager.process();  // NUEVO: Procesa ACKs pendientes
+            incidentManager.pollIncidents();
+            incidentManager.process();
         }
         
-        // Reporte periódico por Serial
         if (now - lastReportTime >= reportInterval) {
             generateUnifiedReport();
             lastReportTime = now;
         }
     }
 }
-
-// Callbacks de incidentes
-void ClairDevice::onIncidentDetected(const Incident& incident) {
-    Serial.println("\n🔴🔴🔴 INCIDENT ACTIVATED 🔴🔴🔴");
-    incident.print();
-    
-    extern ClairDevice* g_clairDevice;
-    if (g_clairDevice) {
-        // Agregar el color del incidente
-        g_clairDevice->addIncidentColor(incident.metric);
-        // NOTA: No llamar a updateLedByIncidents()
-    }
-}
-
-void ClairDevice::onIncidentResolved(const Incident& incident) {
-    Serial.println("\n🟢🟢🟢 INCIDENT RESOLVED 🟢🟢🟢");
-    incident.print();
-    
-    extern ClairDevice* g_clairDevice;
-    if (g_clairDevice) {
-        // Remover el color del incidente
-        g_clairDevice->removeIncidentColor(incident.metric);
-        // NOTA: No llamar a updateLedByIncidents()
-    }
-}
-
 
 void ClairDevice::printEdgeStats() {
     edge.printStats();
@@ -508,14 +375,11 @@ void ClairDevice::updateAirQualityData() {
         currentData.airQuality.valid = false;
     }
     
-    // Evaluate overall air quality status
     currentData.evaluateStatus(thresholds);
 
-    // NUEVO: Agregar tiempo real si está sincronizado
     if (timeSynchronized) {
         currentData.timeFormatted = getFormattedTime();
         
-        // Calcular uptime formateado
         unsigned long uptimeSec = millis() / 1000;
         unsigned long hours = uptimeSec / 3600;
         unsigned long minutes = (uptimeSec % 3600) / 60;
@@ -542,12 +406,9 @@ void ClairDevice::updateParticulateMatterData() {
         currentData.particulateMatter.valid = false;
     }
     
-    // Evaluate overall air quality status
     currentData.evaluateStatus(thresholds);
 }
 
-
-// Generate unified report and update display
 void ClairDevice::generateUnifiedReport() {
     currentData.timestamp = millis();
     currentData.print();
@@ -566,6 +427,7 @@ void ClairDevice::on(Event event) {
 }
 
 void ClairDevice::handle(Command command) {
+    // Comandos del sistema
     if (command.id == CLAIR_REPORT_COMMAND) {
         Serial.println("Force report");
         forceReport();
@@ -584,21 +446,22 @@ void ClairDevice::handle(Command command) {
              command.id == OLEDDisplay::DISPLAY_WAKE_COMMAND) {
         display.handle(command);
     }
-
-    // NUEVOS: Comandos para control manual del LED
-    if (command.id == 3000) {  // LED_ON
-        warningLed.setColor(true, true, true);
+    // Comandos para LED simple
+    else if (command.id == LED_ON_COMMAND) {
+        warningLed.on();
         Serial.println("[LED] Manual ON");
     }
-    else if (command.id == 3001) {  // LED_OFF
+    else if (command.id == LED_OFF_COMMAND) {
         warningLed.off();
         Serial.println("[LED] Manual OFF");
     }
-    else if (command.id == 3002) {  // LED_BLINK (opcional)
-        // Implementar blink
+    else if (command.id == LED_BLINK_COMMAND) {
+        warningLed.startBlink(500);
+        Serial.println("[LED] Manual BLINK started");
     }
-    else if (command.id == 3003) {  // ACKNOWLEDGE_ALL        
-        Serial.println("[LED] All incidents acknowledged");
+    else if (command.id == LED_ACKNOWLEDGE_ALL) {
+        warningLed.stopBlink();
+        Serial.println("[LED] Blink stopped after acknowledge");
     }
 }
 
@@ -705,40 +568,25 @@ void ClairDevice::setStandbyMode(bool standby) {
     if (standbyMode) {
         Serial.println("[ClairDevice] Entering STANDBY mode - suspending all non-essential operations");
         
-        // Apagar display
         display.off();
-        
-        // Apagar LED de advertencia
         warningLed.off();
         
-        // Poner sensores en sleep (si soportan)
         if (pms5003Device.getSensor().isInitialized()) {
             pms5003Device.getSensor().sleep();
         }
         
-        // NOTA: SCD41 no tiene sleep fácil, simplemente dejamos de leerlo
-        
-        // Deshabilitar envío de telemetría
         edge.setTelemetryEnabled(false);
-        
-        // Guardar intervalo original para restaurar después
-        // (opcional, podrías tener variables miembro para esto)
         
     } else {
         Serial.println("[ClairDevice] Exiting STANDBY mode - resuming normal operation");
         
-        // Encender display
         display.on();
         
-        // Reactivar sensores
         if (pms5003Device.getSensor().isInitialized()) {
             pms5003Device.getSensor().wake();
         }
         
-        // Re-habilitar telemetría
         edge.setTelemetryEnabled(true);
-        
-        // Forzar una lectura inmediata para actualizar estado
         forceReport();
     }
 }

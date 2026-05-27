@@ -9,9 +9,9 @@
 #define WIFI_PASSWORD ""
 
 // Simplificado - una sola URL 
-#define EDGE_BASE_URL ""  // Cambiar por tu URL real
-#define HARDWARE_ID "CLAIR-DMWR"
-#define API_KEY "huCHrR5PWwUE-5nFUJBXyokXJW29vn_yRgOdzlOBkkM"
+#define EDGE_BASE_URL ""  // Cambiar por tu URL real, solo http no https
+#define HARDWARE_ID ""
+#define API_KEY ""
 
 #define CLOUD_SEND_INTERVAL 10000      // 10 segundos - telemetría al Cloud
 #define REMOTE_COMMAND_POLL_INTERVAL 5000     // 5 segundos - comandos desde Edge
@@ -24,7 +24,7 @@ ClairDevice* g_clairDevice = &clair;  // Instancia global para callbacks estáti
 
 void printBanner() {
     Serial.println("\n==================================================");
-    Serial.println("     Environmental Monitoring System v1.5");
+    Serial.println("     Environmental Monitoring System v1.6");
     Serial.println("==================================================\n");
 }
 
