@@ -64,8 +64,8 @@ void OLEDDisplay::refresh() {
     
     // Line 1: Status
     display.setCursor(0, y);
-    display.print("Status: ");
-    display.println(currentData.airQuality.statusLabel);
+    //display.print("Status: ");
+    //display.println(currentData.airQuality.statusLabel);
     y += lineHeight;
     
     // Blank line
