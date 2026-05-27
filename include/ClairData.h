@@ -150,8 +150,8 @@ struct ClairData {
     Serial.print(timestamp);
     Serial.println(" ms");
     
-    Serial.print("Status:   ");
-    Serial.println(statusLabel.c_str());
+    //Serial.print("Status:   ");
+    //Serial.println(statusLabel.c_str());
     
     if (airQuality.valid) {
         Serial.print("CO2:      ");
@@ -185,8 +185,8 @@ struct ClairData {
         Serial.print("AQI:      ");
         Serial.println(airQualityIndex.aqi);
         
-        Serial.print("Category: ");
-        Serial.println(airQualityIndex.category.c_str());
+        //Serial.print("Category: ");
+        //Serial.println(airQualityIndex.category.c_str());
     }
     Serial.println();
 }
