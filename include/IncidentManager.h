@@ -323,7 +323,9 @@ public:
     /**
      * @brief Consulta incidentes pendientes
      */
-    bool pollIncidents() {
+    // En IncidentManager.h, modificar pollIncidents() para manejar múltiples incidentes de la misma métrica
+
+bool pollIncidents() {
     if (!enabled) return false;
     if (WiFi.status() != WL_CONNECTED) return false;
     
@@ -360,6 +362,9 @@ public:
             
             Serial.printf("[IncidentManager] Processing %d event(s)\n", events.size());
             
+            // 🔧 NUEVO: Marcar qué métricas tienen incidentes ACTIVOS en este poll
+            bool metricHasActive[4] = {false, false, false, false}; // CO2, PM25, TEMP, HUMIDITY
+            
             for (JsonObject evt : events) {
                 int id = evt["id"] | 0;
                 String metric = evt["metric"] | "";
@@ -367,57 +372,134 @@ public:
                 String occurredAt = evt["occurred_at"] | "";
                 String resolvedAt = evt["resolved_at"] | "";
                 
+                // Registrar qué métricas tienen ACTIVE
+                if (status == "ACTIVE") {
+                    if (metric == "CO2") metricHasActive[0] = true;
+                    else if (metric == "PM25") metricHasActive[1] = true;
+                    else if (metric == "TEMP") metricHasActive[2] = true;
+                    else if (metric == "HUMIDITY") metricHasActive[3] = true;
+                }
+                
                 int existingIndex = findIncidentById(id);
                 
                 if (status == "ACTIVE") {
                     if (existingIndex < 0) {
-                        Incident incident;
-                        incident.id = id;
-                        incident.metric = metric;
-                        incident.status = status;
-                        incident.occurredAt = occurredAt;
-                        incident.resolvedAt = resolvedAt;
-                        incident.acknowledged = false;
-                        addIncident(incident);
+                        // 🔧 NUEVO: Verificar si ya hay un incidente activo de la misma métrica
+                        int sameMetricIndex = -1;
+                        for (int i = 0; i < incidentCount; i++) {
+                            if (activeIncidents[i].metric == metric) {
+                                sameMetricIndex = i;
+                                break;
+                            }
+                        }
+                        
+                        if (sameMetricIndex >= 0) {
+                            // Reemplazar el incidente antiguo por el nuevo
+                            Serial.printf("[IncidentManager] ⚠️ Replacing old %s incident #%d with new #%d\n", 
+                                          metric.c_str(), activeIncidents[sameMetricIndex].id, id);
+                            
+                            // Notificar resolución del antiguo
+                            if (onIncidentResolved) {
+                                onIncidentResolved(activeIncidents[sameMetricIndex]);
+                            }
+                            
+                            // Reemplazar
+                            activeIncidents[sameMetricIndex].id = id;
+                            activeIncidents[sameMetricIndex].metric = metric;
+                            activeIncidents[sameMetricIndex].status = status;
+                            activeIncidents[sameMetricIndex].occurredAt = occurredAt;
+                            activeIncidents[sameMetricIndex].resolvedAt = resolvedAt;
+                            activeIncidents[sameMetricIndex].acknowledged = false;
+                            
+                            // Notificar nuevo incidente
+                            if (onIncidentDetected) {
+                                onIncidentDetected(activeIncidents[sameMetricIndex]);
+                            }
+                            
+                            queueAck(id, "ACTIVE");
+                        } else {
+                            // Incidente nuevo de métrica sin incidente activo
+                            Incident incident;
+                            incident.id = id;
+                            incident.metric = metric;
+                            incident.status = status;
+                            incident.occurredAt = occurredAt;
+                            incident.resolvedAt = resolvedAt;
+                            incident.acknowledged = false;
+                            addIncident(incident);
+                        }
                     }
                 } 
                 else if (status == "RESOLVED") {
-                    // 🔧 CORRECCIÓN: Siempre resolver, incluso si no está en la lista
                     if (existingIndex >= 0) {
-                        // Está en la lista activa - resolver normalmente
                         resolveIncident(id, resolvedAt);
                     } else {
-                        // No está en la lista activa pero está resuelto
-                        // Asegurar que no quede ningún estado pendiente
-                        Serial.printf("[IncidentManager] Incident #%d resolved but not in active list - ensuring clean state\n", id);
+                        // 🔧 NUEVO: Buscar incidente de la misma métrica y resolverlo
+                        int sameMetricIndex = -1;
+                        for (int i = 0; i < incidentCount; i++) {
+                            if (activeIncidents[i].metric == metric) {
+                                sameMetricIndex = i;
+                                break;
+                            }
+                        }
                         
-                        // Encolar ACK para RESOLVED de todas formas
-                        queueAck(id, "RESOLVED");
-                        
-                        // Verificar si hay que limpiar algún estado residual
-                        // (forzar callback de resolución por si acaso)
-                        if (onIncidentResolved) {
-                            Incident dummyIncident;
-                            dummyIncident.id = id;
-                            dummyIncident.metric = metric;
-                            dummyIncident.status = "RESOLVED";
-                            dummyIncident.resolvedAt = resolvedAt;
-                            onIncidentResolved(dummyIncident);
+                        if (sameMetricIndex >= 0) {
+                            Serial.printf("[IncidentManager] 🔧 Resolving %s incident #%d (old) via resolution of #%d\n", 
+                                          metric.c_str(), activeIncidents[sameMetricIndex].id, id);
+                            
+                            // Resolver el incidente antiguo
+                            resolveIncident(activeIncidents[sameMetricIndex].id, resolvedAt);
+                        } else {
+                            Serial.printf("[IncidentManager] Incident #%d resolved but not in active list\n", id);
+                            
+                            if (onIncidentResolved) {
+                                Incident dummyIncident;
+                                dummyIncident.id = id;
+                                dummyIncident.metric = metric;
+                                dummyIncident.status = "RESOLVED";
+                                dummyIncident.resolvedAt = resolvedAt;
+                                onIncidentResolved(dummyIncident);
+                            }
+                            
+                            queueAck(id, "RESOLVED");
                         }
                     }
                 }
             }
+            
+            // 🔧 NUEVO: Limpiar incidentes de métricas que ya no tienen ACTIVE
+            for (int i = incidentCount - 1; i >= 0; i--) {
+                bool shouldBeActive = false;
+                if (activeIncidents[i].metric == "CO2") shouldBeActive = metricHasActive[0];
+                else if (activeIncidents[i].metric == "PM25") shouldBeActive = metricHasActive[1];
+                else if (activeIncidents[i].metric == "TEMP") shouldBeActive = metricHasActive[2];
+                else if (activeIncidents[i].metric == "HUMIDITY") shouldBeActive = metricHasActive[3];
+                
+                if (!shouldBeActive && activeIncidents[i].status == "ACTIVE") {
+                    Serial.printf("[IncidentManager] 🧹 Cleaning stale %s incident #%d (no longer active on server)\n", 
+                                  activeIncidents[i].metric.c_str(), activeIncidents[i].id);
+                    
+                    if (onIncidentResolved) {
+                        onIncidentResolved(activeIncidents[i]);
+                    }
+                    
+                    // Eliminar del array
+                    for (int j = i; j < incidentCount - 1; j++) {
+                        activeIncidents[j] = activeIncidents[j + 1];
+                    }
+                    incidentCount--;
+                }
+            }
+            
             return incidentCount > 0;
         }
-    } 
+    }
     else if (httpCode == 404 || httpCode == 204) {
-        // 🔧 CORRECCIÓN: Si no hay incidentes pendientes, limpiar TODO
         httpClient.end();
         
         if (incidentCount > 0) {
             Serial.printf("[IncidentManager] No pending incidents - Clearing all %d active incidents\n", incidentCount);
             
-            // Notificar resolución para todos los incidentes activos
             for (int i = 0; i < incidentCount; i++) {
                 if (onIncidentResolved) {
                     onIncidentResolved(activeIncidents[i]);
@@ -425,7 +507,6 @@ public:
                 queueAck(activeIncidents[i].id, "RESOLVED");
             }
             
-            // Limpiar completamente la lista de incidentes activos
             incidentCount = 0;
         }
         return false;
