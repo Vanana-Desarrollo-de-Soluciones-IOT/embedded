@@ -13,13 +13,14 @@ public:
     static const int SCL_PIN = 22;
     static const unsigned long READ_INTERVAL_MS = 2000;
 
-    SCD41SensorDevice(int sdaPin = SDA_PIN, int sclPin = SCL_PIN, unsigned long readInterval = READ_INTERVAL_MS);
+    SCD41SensorDevice(int sdaPin = SDA_PIN, int sclPin = SCL_PIN, 
+                      unsigned long readInterval = READ_INTERVAL_MS);
     
     void on(Event event) override;
     void handle(Command command) override;
     
     SCD41Sensor& getSensor();
-    void update();  // Update the sensor periodically
+    void update();
 };
 
 #endif

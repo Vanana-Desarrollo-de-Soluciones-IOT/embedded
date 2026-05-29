@@ -5,9 +5,6 @@
 
 #include "ClairDevice.h"
 
-#define WIFI_SSID "Wokwi-GUEST"
-#define WIFI_PASSWORD ""
-
 // Simplificado - una sola URL 
 #define EDGE_BASE_URL ""  // Cambiar por tu URL real, solo http no https
 #define HARDWARE_ID ""
@@ -37,7 +34,7 @@ void setup() {
     clair.begin();
     
     // PRIMERO: Conectar WiFi (rápido)
-    clair.setupWiFi(WIFI_SSID, WIFI_PASSWORD);
+    clair.setupWiFi("", "");
     
     // SEGUNDO: Iniciar NTP (rápido, no bloqueante)
     clair.beginNTP("pool.ntp.org", -18000);

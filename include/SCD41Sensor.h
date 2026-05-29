@@ -2,54 +2,81 @@
 #define SCD41_SENSOR_H
 
 #include "Sensor.h"
-#include "DFRobot_SCD4X.h"
 #include <Wire.h>
+#include <SensirionI2cScd4x.h>
 
+/**
+ * @brief SCD41 Sensor class using Sensirion I2C library
+ * 
+ * Implements the Sensirion SCD41 CO2, temperature, and humidity sensor
+ * with proper initialization (wakeUp, reinit, startPeriodicMeasurement).
+ */
 class SCD41Sensor : public Sensor {
 private:
-    class MySCD41 : public DFRobot_SCD4X {
-    public:
-        MySCD41(TwoWire *pWire = &Wire, uint8_t i2cAddr = 0x62) 
-            : DFRobot_SCD4X(pWire, i2cAddr) {}
-        
-        bool getSerialNumber(uint16_t *wordBuf) {
-            return DFRobot_SCD4X::getSerialNumber(wordBuf);
-        }
-        
-        int16_t performForcedRecalibration(uint16_t CO2ppm) {
-            return DFRobot_SCD4X::performForcedRecalibration(CO2ppm);
-        }
-    };
-    
-    MySCD41 scd41;
+    SensirionI2cScd4x scd4x;
     int sdaPin;
     int sclPin;
     unsigned long readInterval;
     unsigned long lastReadTime;
-    bool dataReady;
     bool sensorInitialized;
+    bool dataValid;
     
-    DFRobot_SCD4X::sSensorMeasurement_t lastMeasurement;
+    // Last readings
+    uint16_t lastCO2;
+    float lastTemperature;
+    float lastHumidity;
+    
+    // Error handling
+    char errorMessage[64];
     
 public:
+    // Event ID for data ready
     static const int DATA_READY_EVENT_ID = 100;
     
-    // IMPORTANTE: El handler debe ser EventHandler*, NO CommandHandler*
+    /**
+     * @brief Constructor for SCD41 sensor
+     * @param sda I2C SDA pin
+     * @param scl I2C SCL pin
+     * @param interval Read interval in milliseconds
+     * @param handler Event handler (typically the Device)
+     */
     SCD41Sensor(int sda, int scl, unsigned long interval, EventHandler* handler = nullptr);
     ~SCD41Sensor();
     
+    /**
+     * @brief Initialize the sensor with full wake-up sequence
+     * @return true if initialization successful
+     */
     bool begin();
+    
+    /**
+     * @brief Update sensor state - call periodically
+     */
     void update();
+    
+    /**
+     * @brief Handle events from Device
+     */
     void on(Event event) override;
     
-    uint16_t getCO2();
-    float getTemperature();
-    float getHumidity();
+    // Getters
+    uint16_t getCO2() const { return lastCO2; }
+    float getTemperature() const { return lastTemperature; }
+    float getHumidity() const { return lastHumidity; }
+    bool isInitialized() const { return sensorInitialized; }
+    bool isDataValid() const { return dataValid; }
+    
+    // Utility methods
     void printSerialNumber();
     bool recalibrate(uint16_t targetCO2ppm);
+    void performForcedRecalibration(uint16_t targetCO2ppm);
     
-    bool isDataReady() const { return dataReady; }
-    bool isInitialized() const { return sensorInitialized; }
+private:
+    /**
+     * @brief Read measurement from sensor
+     * @return true if reading was successful and valid
+     */
+    bool readMeasurement();
 };
 
-#endif
+#endif // SCD41_SENSOR_H
