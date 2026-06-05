@@ -1,0 +1,278 @@
+---
+title: Clair System - Class Diagram (4 Layers)
+---
+
+classDiagram
+    namespace interfaces {
+        class ClairDevice {
+            +begin()
+            +update()
+            +on(Event)
+            +handle(Command)
+            +getCurrentData()
+            +forceReport()
+            +setupEdge()
+            +setupIncidentManager()
+            +setupWiFi()
+            +setStandbyMode()
+            +setSimulationEnabled()
+            +beginNTP()
+            +printEdgeStats()
+        }
+    }
+
+    namespace application {
+        class EdgeService {
+            +begin()
+            +sendTelemetry()
+            +pollCommands()
+            +processCommandQueue()
+            +setCommandCallback()
+            +setTelemetryEnabled()
+            +forceTelemetry()
+            +printStats()
+        }
+
+        class IncidentManager {
+            +begin()
+            +pollIncidents()
+            +process()
+            +hasActiveIncidents()
+            +getActiveCount()
+            +setCallbacks()
+            +printStats()
+        }
+
+        class WiFiService {
+            +begin()
+            +update()
+            +isConnected()
+            +getLocalIP()
+            +printStatus()
+        }
+
+        class RemoteCommand {
+            +String commandId
+            +String type
+            +String parameters
+            +bool valid
+        }
+
+        class Incident {
+            +int id
+            +String metric
+            +String status
+            +String occurredAt
+            +String resolvedAt
+            +bool acknowledged
+            +print()
+        }
+    }
+
+    namespace domain {
+        class Device {
+            <<abstract>>
+            +on(Event)*
+            +handle(Command)*
+        }
+
+        class Sensor {
+            <<abstract>>
+            #int pin
+            #EventHandler* handler
+            +on(Event)
+            +setHandler()
+        }
+
+        class Actuator {
+            <<abstract>>
+            #int pin
+            #CommandHandler* handler
+            +handle(Command)
+            +setHandler()
+        }
+
+        class SCD41Sensor {
+            +DATA_READY_EVENT_ID
+            +begin()
+            +update()
+            +getCO2()
+            +getTemperature()
+            +getHumidity()
+            +recalibrate()
+        }
+
+        class PMS5003Sensor {
+            +DATA_READY_EVENT_ID
+            +begin()
+            +update()
+            +getData()
+            +sleep()
+            +wake()
+            +reset()
+        }
+
+        class Led {
+            +on()
+            +off()
+            +toggle()
+            +startBlink()
+            +stopBlink()
+            +update()
+            +isBlinking()
+        }
+
+        class OLEDDisplay {
+            +begin()
+            +updateData()
+            +refresh()
+            +sleep()
+            +wake()
+            +off()
+            +on()
+            +autoPowerManagement()
+        }
+
+        class ClairData {
+            +unsigned long timestamp
+            +struct airQuality
+            +struct particulateMatter
+            +struct airQualityIndex
+            +status
+            +String statusLabel
+            +String timeFormatted
+            +String uptimeFormatted
+            +String country
+            +calculateAQI()
+            +evaluateStatus()
+            +print()
+        }
+
+        class DisplayData {
+            +struct airQuality
+            +struct particulateMatter
+            +struct aqi
+        }
+
+        class PMS5003Data {
+            +uint16_t pm1_0
+            +uint16_t pm2_5
+            +uint16_t pm10
+            +bool valid
+        }
+
+        class AirQualityThresholds {
+            +uint16_t pm25ModerateLimit
+            +uint16_t pm25CriticalLimit
+            +uint16_t pm10ModerateLimit
+            +uint16_t pm10CriticalLimit
+            +uint16_t co2ModerateLimit
+            +uint16_t co2CriticalLimit
+            +uint8_t humidityModerateLow
+            +uint8_t humidityModerateHigh
+            +uint8_t humidityCriticalLow
+            +uint8_t humidityCriticalHigh
+        }
+
+        class Event {
+            +int id
+        }
+
+        class Command {
+            +int id
+        }
+
+        class AirQualityStatus {
+            <<enum>>
+            OPTIMAL
+            MODERATE
+            CRITICAL
+        }
+
+        class DisplayState {
+            <<enum>>
+            DISPLAY_ON
+            DISPLAY_SLEEP
+            DISPLAY_OFF
+        }
+    }
+
+    namespace infrastructure {
+        class SCD41SensorDevice {
+            +getSensor()
+            +update()
+            +on()
+            +handle()
+        }
+
+        class PMS5003SensorDevice {
+            +getSensor()
+            +update()
+            +on()
+            +handle()
+        }
+
+        class ClairPins {
+            +int scd41_sda
+            +int scd41_scl
+            +int pms_rx
+            +int pms_tx
+            +int pms_set
+            +int pms_reset
+            +int led_pin
+        }
+
+        class PendingAck {
+            +int incidentId
+            +String status
+            +unsigned long lastAttempt
+            +int retryCount
+            +bool active
+        }
+    }
+
+    %% Inheritance - Domain
+    Device <|-- SCD41SensorDevice
+    Device <|-- PMS5003SensorDevice
+    Device <|-- ClairDevice
+    Sensor <|-- SCD41Sensor
+    Sensor <|-- PMS5003Sensor
+    Actuator <|-- Led
+    Actuator <|-- OLEDDisplay
+
+    %% Composition - Interfaces Layer
+    ClairDevice *-- SCD41SensorDevice
+    ClairDevice *-- PMS5003SensorDevice
+    ClairDevice *-- OLEDDisplay
+    ClairDevice *-- Led
+    ClairDevice *-- EdgeService
+    ClairDevice *-- IncidentManager
+    ClairDevice *-- WiFiService
+    ClairDevice ..> ClairData
+    ClairDevice ..> AirQualityThresholds
+    ClairDevice ..> RemoteCommand
+    ClairDevice ..> Incident
+
+    %% Composition - Application Layer
+    EdgeService ..> RemoteCommand
+    IncidentManager ..> Incident
+    IncidentManager ..> PendingAck
+
+    %% Composition - Infrastructure Layer
+    SCD41SensorDevice *-- SCD41Sensor
+    PMS5003SensorDevice *-- PMS5003Sensor
+    SCD41SensorDevice ..> Event
+    PMS5003SensorDevice ..> Event
+    SCD41SensorDevice ..> Command
+    PMS5003SensorDevice ..> Command
+
+    %% Usage relationships
+    EdgeService --> ClairData
+    EdgeService --> WiFiService
+    IncidentManager --> WiFiService
+    OLEDDisplay --> DisplayData
+    SCD41Sensor --> Event
+    PMS5003Sensor --> Event
+    PMS5003Sensor --> PMS5003Data
+    ClairDevice --> Event
+    ClairDevice --> Command
