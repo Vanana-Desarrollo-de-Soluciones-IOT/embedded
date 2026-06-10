@@ -1,0 +1,37 @@
+{
+  "name": "scd41",
+  "author": "",
+  "pins": [
+    "VCC",
+    "GND",
+    "SDA",
+    "SCL"
+  ],
+  "controls": [
+    {
+      "id": "co2",
+      "type": "range",
+      "label": "CO2 (ppm)",
+      "min": 0,
+      "max": 9000,
+      "default": 420
+    },
+    {
+      "id": "temperature",
+      "type": "range",
+      "label": "Temperature (°C)",
+      "min": -10,
+      "max": 60,
+      "default": 25,
+      "step": 0.1
+    },
+    {
+      "id": "humidity",
+      "type": "range",
+      "label": "Humidity (%)",
+      "min": 0,
+      "max": 100,
+      "default": 50
+    }
+  ]
+}

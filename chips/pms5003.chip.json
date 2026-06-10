@@ -1,0 +1,48 @@
+{
+  "name": "pms5003",
+  "author": "Mateo Alemán & Ian Macavilca",
+  "pins": [
+    "VCC",
+    "GND",
+    "SET",
+    "RX",
+    "TX",
+    "RESET",
+    "NC",
+    "NC"
+  ],
+  "controls": [
+    {
+      "id": "pm1",
+      "type": "range",
+      "label": "PM1.0 (μg/m³)",
+      "min": 0,
+      "max": 500,
+      "default": 12
+    },
+    {
+      "id": "pm25",
+      "type": "range",
+      "label": "PM2.5 (μg/m³)",
+      "min": 0,
+      "max": 500,
+      "default": 24
+    },
+    {
+      "id": "pm10",
+      "type": "range",
+      "label": "PM10 (μg/m³)",
+      "min": 0,
+      "max": 500,
+      "default": 36
+    },
+    {
+      "id": "variation",
+      "type": "range",
+      "label": "Variación aleatoria",
+      "min": 0,
+      "max": 30,
+      "default": 5
+    }
+  ]
+}
